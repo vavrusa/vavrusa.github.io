@@ -1,0 +1,612 @@
+---
+layout: post
+title: What a C programmer should know about memory: the street-fighting guide
+---
+
+<p style="text-align:center">
+<img src="http://upload.wikimedia.org/wikipedia/commons/thumb/8/8c/Oriental_weapons.jpg/800px-Oriental_weapons.jpg"/>
+<br />
+<cite>Source: Weapons by <a href="http://www.flickr.com/photos/t4llberg/5828882565">T4LLBERG</a>, on Flickr (CC-BY-SA)</cite>
+</p>
+
+In 2007, Ulrich Drepper wrote a *"[What every programmer should know about memory](http://www.akkadia.org/drepper/cpumemory.pdf)"*. Yes, it's a wee long-winded, but it's worth its salt. Many years and "every programmer should know about" articles later, the concept of virtual memory is still elusive to many, as if it was *a kind of magic*. Awww, I couldn't resist the reference. Even the validity of the original article was
+[questioned][so-drepper] many years later. *What gives?*
+
+> <cite>"North bridge, south bridge? What is this crap? That ain't street-fighting."</cite>
+
+I'll try to convey the practical side of things (i.e. what can you do) from *"getting your fundamentals on a lock"*, to more fun stuff. Think of it as a glue between the original article, and the things that you use every day. The examples are going to be C99 on Linux, but a lot of topics are universal. Without further ado, grab a cup of coffee and let's get to it. 
+
+## Understanding virtual memory - plot thickens
+
+Unless you're dealing with some embedded systems or kernel-space code, you're going to be working in protected mode. This is *awesome*, since your program is guaranteed to have it's own [virtual] address space. The word *"virtual"* is important here. This means, among other things, that you're not bounded by the available memory, but also not entitled to any. In order to use this space, you have to ask the OS to back it with something real, this is called *mapping*. A backing can be either a physical memory (not necessarily RAM), or a persistent storage. The former is also called an *"anonymous mapping"*. But hold on, the cake is a lie, as the virtual memory allocator (VMA) *may* give you a memory it doesn't have, all in a vain hope that you're not going to use it. Just like banks today. This is called *[overcommiting][linux-overcommit]*, and while it has legitimate applications *(sparse arrays)*, it also means that the memory allocation is not going to simply say **"NO"**.
+
+```c
+
+char *cats = malloc(1024 * sizeof(char *)); /* That's a lot of cats! */
+if (cats == NULL) {
+	return -ENOMEM; /* Sad :( */
+}
+
+```
+
+The `NULL` return value checking is a good practice, but it's not as powerful as it once was. With the overcommit, the OS may give you a valid pointer to
+memory, but if you're going to use it - dang. The *dang* in this case is platform-specific, but generally an [OOM killer][linux-oom] killing your process.
+
+### Detour - process memory layout
+
+The layout of a process memory is well covered in the *[Anatomy of a Program in Memory][duarte-anatomy]* from by Gustavo Duarte, so I'm going to quote and reference to the original article, I hope it's a *fair use*. I have only a few minor quibbles, for one it covers only a x86-32 memory layout, but fortunately nothing much has changed for x86-64. Except that a process can use much more space &mdash; the whopping 48 bits on Linux.
+
+<p style="text-align:center">
+<br />
+<a href="http://duartes.org/gustavo/blog/post/anatomy-of-a-program-in-memory/"><img src="http://static.duartes.org/img/blogPosts/linuxFlexibleAddressSpaceLayout.png" alt="x86-32 Linux address space layout, source: duartes.org/gustavo/blog/post/anatomy-of-a-program-in-memory" /></a>
+<br />
+<cite>Source: Linux address space layout by <a href="http://duartes.org/gustavo/blog/post/anatomy-of-a-program-in-memory/">Gustavo Duarte</a></cite>
+</p>
+
+It also shows the memory mapping segment (MMS) growing down, but that may not always be the case.
+The MMS usually starts ([x86/mm/mmap.c:113][linux-mmap-topdown1] and [arch/mm/mmap.c:1953][linux-mmap-topdown2]) at a randomized address just below the lowest address of the stack. *Usually*, because it may start above the stack and grow upwards *iff* the stack limit is large (or _unlimited_), or the compatibility layout is enabled. *Yawn, how is this important in the street-fight?* It's not, but it helps you to [guess a free address range](#mmap-fun) for example.
+
+Looking at the diagram, you can see three possible variable placements: the process data segment *(static storage or heap allocation)*, the memory mapping segment, and the stack. Let's start with that one.
+
+## Understanding stack allocation
+
+>*Utility belt:*
+>
+>* [`alloca()` - allocate memory in the stack frame of the caller][alloca]
+>* [`getrlimit()` - get/set resource limits][getrlimit]
+>* [`sigaltstack()` - set and/or get signal stack context][sigaltstack]
+
+The stack is kind of easy to digest, everybody knows how to make a variable on the stack right? Here are two:
+
+```c
+int stairway = 2;
+int heaven[] = { 6, 5, 4 }; /* Wow, very stack! */
+```
+
+The validity of the variables is limited by scope. In C, that means this: `{}`. So each time an ending curly bracket comes, a variable dies.
+And then there's [`alloca()`][alloca], which allocates memory in the current *stack frame*. A stack frame is not (entirely) the same thing as memory frame (aka *physical* page), it's simply a frame of data that gets pushed on the stack (function, parameters, variables...). Since we're on the top of the stack, we can use the remaining memory up to the stack size limit. This is how variable-length arrays (VLA), and also [`alloca()`][alloca] work, with one difference - *VLA* validity is limited by the scope, alloca'd memory persists until the current function returns (or *unwinds* if you're feeling sophisticated). This is not language lawyering, but a real issue if you're using the alloca inside a loop, as you don't have any means to free it.
+
+```c
+void laugh(void) {
+	for (unsigned i = 0; i < megatron; ++i) {
+		char *res = alloca(2);
+		strcpy(res, "ha");
+	    char vla[2] = {'h','a'}
+	} /* vla dies, res lives */
+} /* all allocas die */
+```
+
+Neither VLA or alloca play nice with large allocations, because you have almost no control over the available stack memory and the allocation
+past the stack limits leads to the jolly stack overflow. There are two ways around it, but neither is practical &mdash; the first idea is to use a [`sigaltstack()`][sigaltstack] to catch and handle the `SIGSEGV`. However this just lets you catch the stack overflow.
+
+The other way is to use *split-stacks*. It's called *split*, because it really splits the monolithic stack into a linked-list of smaller stacks called
+*stacklets*, \*awww\*. As far as I know, [GCC][splitstack-gcc] and [clang][splitstack-clang] support it with the [`-fsplit-stack`][splitstack-gcc] option.
+In theory this also improves memory consumption and reduces the cost of creating threads &mdash; because the stack can start really small and grow on demand.
+In reality, expect compatibility issues, as it needs a split-stack aware linker (i.e. gold) to play nice with split-stack *unaware* libraries,
+and performance issues (the *"hot split"* problem in Go is [nicely explained][splitstack-anastasopoulos] by Agis Anastasopoulos).
+
+## Understanding heap allocation
+
+>*Utility belt:*
+>
+>* [`brk(), sbrk()` - manipulate the data segment size][sbrk]
+>* [`malloc()` family - portable libc memory allocator][malloc]
+
+The heap allocation can be as simple as moving a [program break][sbrk] and claiming the memory between the old position, and the new position.
+Up to this point, a heap allocation is as fast as stack allocation *(sans the paging, presuming the stack is already locked in memory)*. But there's a ~~cat~~ catch, dammit.
+
+```c
+char *cats = sbrk(1024 * sizeof(char *));
+if (cats != NULL) {
+	/* Meow! */
+}
+```
+
+① we can't reclaim unused memory blocks, ② it is not thread-safe since the heap is
+shared between threads, ③ `brk()` is deprecated and hardly portable interface, libraries must not touch the brk.
+
+> `man 3 sbrk` &mdash; Various systems use various types for the argument of sbrk(). Common are int, ssize_t, ptrdiff_t, intptr_t.
+
+For these reasons libc implements a centralized interface for memory allocation. The [implementation varies][malloc-implementation], but it provides you a
+thread safe memory allocation of any size ... at a cost. The cost is latency, as there is now locking involved, data structures keeping
+the information about used / free blocks and an extra memory overhead. The heap is not used exclusively either,
+as the memory mapping segment is often utilised for large blocks as well.
+
+> `man 3 malloc` &mdash; Normally, `malloc()` allocates memory from the heap, ... when allocating blocks of memory larger than MMAP_THRESHOLD, the glibc `malloc()` implementation allocates the memory as a private anonymous mapping.
+
+As the heap is always contiguous from `start_brk` to `brk`, you can't exactly punch holes through it and reduce the data segment size. Imagine the following scenario (checks missing for the sake of brevity):
+
+```c
+char *longcat = malloc(1024 * 1024 * sizeof(char *));
+char *shortcat = malloc(sizeof(char *));
+free(longcat);
+```
+
+The heap allocates `longcat` and moves the *brk*. The same for the `shortcat`. But after the `longcat` is freed, the *brk* can't be moved down, as it's the shortcat that occupies the highest address. The result is that your process *can* reuse the former `longcat` memory, but it can't be returned to the system until the `shortcat` is freed.
+But presuming the `longcat` was mmaped, it wouldn't reside in the heap segment, and couldn't affect the program break.
+Still, this trick doesn't prevent the holes created by small allocations (in another words "cause *fragmentation*").
+
+Note that the `free()` doesn't automatically try shrink the data segment (yes, there is a heuristic), as that is a [potentially expensive operation](#pagefault).
+This is a problem for long-running programs, such as daemons. A GNU extension, called [`malloc_trim()`][malloc-trim], exists for releasing memory from the top of the heap, but it can be painfully slow. It hurts *real bad* for a lot of small objects, so it should be used sparingly.
+
+### When to bother with a custom allocator
+
+There are a few practical use cases, where a GP allocator falls short &mdash; for example an allocation of a *large* number of *small* fixed-size chunks. This might not look like a typical pattern, but it is very frequent. For example, lookup data structures like trees and tries typically require nodes to build hierarchy. In this case, not only the fragmentation is
+the problem, but also the data locality. A cache-efficient data structure packs the keys together (preferably on the same page), instead of mixing it with data. With the default allocator, there is *no guarantee* about the locality of the blocks from the subsequent allocations. Even worse is the space overhead for allocating small units. Here comes the solution!
+
+<p style="text-align:center">
+<a href="https://flic.kr/p/52updQ">
+<img src="https://farm4.staticflickr.com/3090/2642284820_e3bd840bca_z.jpg?zz=1" />
+</a>
+<br />
+<cite>Source: Slab by <a href="https://www.flickr.com/people/99174151@N00/">wadem</a>, on Flickr (CC-BY-SA)</cite>
+</p>
+
+#### Slab allocator
+
+>*Utility belt:*
+>
+>* [`posix_memalign()` - allocate aligned memory][memalign]
+
+The principle of slab allocation was described by [Bonwick][bonwick94] for a kernel object cache, but the same principle applies for the user-space.
+*Oh-kay*, we're not interested in pinning slabs to CPUs, but back to the principle &mdash; you ask the allocator for a *slab* of memory, let's say a *page*,
+and you cut it into many fixed-size pieces. Presuming each piece can hold at least a pointer or integer, you can make them into a linked list,
+where the *list head* points to the *first free* element.
+
+```c
+/* Super-simple slab. */
+struct slab {
+	void **head;
+};
+
+/* Create page-aligned slab */
+struct slab *slab = NULL;
+posix_memalign(&slab, page_size, page_size);
+slab->head = slab + sizeof(struct slab);
+
+/* Create a NULL-terminated slab freelist */
+char* item = (char*)slab->head;
+for(unsigned i = 0; i < item_count; ++i) {
+	*((void**)item) = item + item_size;
+	item += item_size;
+}
+*((void**)item) = NULL;
+```
+
+Allocation is then as simple as popping a list head. Freeing is equal to as pushing a new list head.
+There is also a neat trick. If the slab is aligned to the `page_size` boundary, you can get the slab pointer as cheaply
+as [rounding down][so-roundpgsize] to the `page_size`.
+
+```c
+/* Free an element */
+struct slab *slab = ptr & PAGESIZE_BITS;
+*((void**)ptr) = (void*)slab->head;
+slab->head = (void**)ptr;
+
+/* Allocate an element */
+if((item = slab->head)) {
+	slab->head = (void**)*item;
+} else {
+	/* Uh oh, no more catz. */
+}
+```
+
+Great, but what about binning, variable size storage, cache aliasing ([Appendix 1](#appendix1)) and caffeine, ...?
+Peek at [my old implementation][slab-knot] for [Knot DNS][knot-dns] to get the idea, or use a library that implements it.
+For example, \*gasp\*, the glib implementation has a [tidy documentation][slab-glib] and calls it *"memory slices"*.
+
+#### Memory pools
+
+>*Utility belt:*
+>
+>* [`obstack_alloc()` - allocate memory from object stack][obstack]
+
+As with the slab, you're going to outsmart the GP allocator by asking it for whole chunks of memory only.
+Then you just slice the cake until it runs out, and then ask for a new one. And another one.
+When you're done with the cakes, you call it a day and free everything in one go.
+
+Does it sound obvious and stupid simple? Because it is, but that's what makes it great for specific use cases.
+You don't have to worry about synchronisation, not about freeing either. There are no use-after-free bugs,
+data locality is much more predictable, there is *almost zero* overhead for small fragments.
+
+The pattern is surprisingly suitable for many tasks, ranging from short-lived repetitive (i.e. *"network request processing"*),
+to long-lived immutable data (i.e. *"frozen set"*).
+You don't have to free *everything* either. If you can make an educated guess on how much memory is needed on average, you can just
+free the excess memory and reuse. This reduces the memory allocation problem to simple pointer arithmetic.
+
+And you're in luck here, as the GNU libc provides, \*whoa\*, an actual API for this. It's called [*obstacks*][obstack], as in "stack of objects".
+The HTML documentation formatting is a bit underwhelming, but minor quibbles aside &mdash; it allows you to do both pool allocation, and full or partial unwinding.
+
+```c
+/* Define block allocator. */
+#define obstack_chunk_alloc malloc
+#define obstack_chunk_free free
+/* Initialize obstack and allocate a bunch of animals. */
+struct obstack animal_stack;
+obstack_init (&animal_stack);
+char *bob = obstack_alloc(&animal_stack, sizeof(cat));
+char *fred = obstack_alloc(&animal_stack, sizeof(cat));
+char *doge = obstack_alloc(&animal_stack, sizeof(dog));
+/* Free everything after fred (i.e. fred and doge). */
+obstack_free(&animal_stack, fred);
+/* Free everything. */
+obstack_free(&animal_stack, NULL);
+```
+
+There is one more trick to it, you can grow the object on the top of the stack. Think buffering input, variable-length arrays,
+or just a way to combat the `realloc()-strcpy()` pattern.
+
+```c
+obstack_grow(&animal_stack, "long", 4);
+obstack_grow(&animal_stack, "doge", 5);
+/* This is wrong, I better cancel it. */
+obstack_free (&animal_stack, obstack_finish(&animal_stack));
+/* This time for real. */
+obstack_grow(&animal_stack, "long", 4);
+obstack_grow(&animal_stack, "cat", 4);
+char *mycat = obstack_finish(&animal_stack);
+printf("%s\n", mycat); /* "longcat" */
+```
+
+##### <a name="pagefault" /> Now you see me, and now you don't
+
+>*Utility belt:*
+>
+>* [`mlock()` - lock/unlock memory][mlock]
+>* [`madvise()` - give advice about use of memory][madvise]
+
+One of the reasons why the GP memory allocator doesn't immediately return the memory to the system is, that it's costly.
+The system has to do two things: ① establish the mapping of a *virtual* page to *real* page, and ② give you a blanked *real* page.
+The *real* page is called *frame*, now you know the difference. Each frame must be sanitized, because you don't want the operating system to leak your secrets to another process, would you?
+But here's the trick, remember the *overcommit*? The virtual memory allocator honours the only the first part of the deal,
+and then plays some *"now you see me and now you don't"* shit &mdash; instead of pointing you to a real page, it points to a *special* page `0`.
+
+Each time you try to access the special page, a page *fault* occurs, which means that: the kernel pauses process execution and fetches a real page,
+then it updates the page tables, and resumes like nothing happened. That's about the best explanation I could muster in one sentence, [here's][duartes-kernelmem] more detailed one.
+This is also called *"demand paging"* or *"lazy loading"*.
+
+> The Spock said that *"one man cannot summon the future"*, but here you can pull the strings.
+
+The memory manager is no oracle and it makes very conservative predictions about how you're going to access memory, but you may know better.
+You can [lock][mlock] the contiguous memory block in *physical* memory, avoiding further page faulting:
+
+```c
+/* Lock the cats in memory. */
+char *cats = malloc(1024 * sizeof(cat));
+mlock(cats, 1024 * sizeof(cat));
+```
+
+\*psst\*, you can also give an [advise][madvise] about your memory usage pattern:
+
+```c
+char *cats = malloc(1024 * sizeof(cat));
+madvise(cats, 1024 * sizeof(cat), MADV_SEQUENTIAL);
+```
+
+The interpretation of the actual advice is platform-specific, the system may even choose to ignore it altogether, but most of the platforms play nice.
+Not all advices are well-supported, and some even change semantics (`MADV_FREE` drops dirty private memory), but the `MADV_SEQUENTIAL`, `MADV_WILLNEED`, and `MADV_DONTNEED` holy trinity is what you're going to use most.
+
+## <a name="mmap-fun" /> Fun with ~~flags~~ memory mapping
+
+>*Utility belt:*
+>
+>* [`sysconf()` - get configuration information at run time][sysconf]
+>* [`mmap()` - map virtual memory][mlock]
+>* [`mincore()` - determine whether pages are resident in memory][mincore]
+>* [`shmat()` - shared memory operations][shmat]
+
+There are several things that the memory allocator *just can't* do, memory maps to to rescue!
+To pick one, the fact that you can't choose the allocated address range.
+For that we're willing to sacrifice some comfort &mdash; we're going to work to be working with whole pages from now on.
+Just to make things clear, a page is usually a 4K block, but you shouldn't rely on it and use [`sysconf()`][sysconf] to discover it.
+
+```c
+long page_size = sysconf(_SC_PAGESIZE); /* Slice and dice. */
+```
+
+### Fixed memory mappings
+
+Say you want to do fixed mapping for a poor man's IPC for example, how do you choose an address? On x86-32 bit it's a risky proposal, but on the 64-bit, an address around 2/3rds of the `TASK_SIZE` (highest usable address of the user space process) is a safe bet. You can get away without fixed mapping, but then forget pointers in your shared memory.
+
+```c
+#define TASK_SIZE 0x800000000000
+#define SHARED_BLOCK (void *)(2 * TASK_SIZE / 3)
+
+void *shared_cats = shmat(shm_key, SHARED_BLOCK, 0);
+if(shared_cats == (void *)-1) {
+    perror("shmat"); /* Sad :( */
+}
+
+```
+
+Okay, I get it, this is hardly a portable example, but you get the gist. Mapping a fixed address range is usually considered unsafe at least, as it doesn't check whether there is something already mapped or not. There is a [`mincore()`][mincore] function to tell you whether a page is mapped or not, but you're out of luck in multi-threaded environment.
+
+However, fixed-address mapping is not only useful for unused address ranges, but for the *used* address ranges as well.
+Remember how the memory allocator used `mmap()` for bigger chunks? This makes efficient sparse arrays possible thanks to the on-demand paging. Let's say you have created a sparse array, and now you want to free some data, but how to do that? You can't exactly `free()` it, and `munmap()` would render it unusable. You could use the [`madvise()`](#pagefault) `MADV_FREE / MADV_DONTNEED` to mark the pages free, this is the best solution performance-wise as the pages don't have to be faulted in, but the semantics of the advice [differs][madvise-behavior] is implementation-specific.
+
+A portable approach is to map over the sucker. That's right.
+
+```c
+/* Map the sparse array */
+void *cats = mmap(NULL, length, PROT_READ|PROT_WRITE, MAP_ANONYMOUS, -1, 0);
+/* Uh oh, let's clear some pages. */
+mmap(cats + offset, length, MAP_FIXED|MAP_ANONYMOUS, -1, 0);
+```
+
+This is equivalent to unmapping the old pages and mapping them again to that *special page*. How does this affect the perception of
+the process memory consumption &mdash; the process still uses the same amount of virtual memory, but the resident *[in physical memory]* size lowers.
+This is as close to memory *hole punching* as we can get.
+
+### File-backed memory maps
+
+>*Utility belt:*
+>
+>* [`msync()` - synchronize a file with memory map][msync]
+>* [`ftruncate()` - truncate a file to a specified length][ftruncate]
+>* [`vmsplice()` - splice user pages into a pipe][vmsplice]
+
+So far we've been all about anonymous memory, but it's the file-backed memory mapping that really shines in the 64 bit address space,
+as it provides you with intelligent caching, synchronization and copy-on-write. Maybe that's too much.
+
+> To most people, LMDB is magic performance sprinkles compared to using the filesystem directly. ;)
+> 
+> &mdash; <cite><a href="http://www.reddit.com/r/programming/comments/2vyzer/what_every_programmer_should_know_about/comhq3s">Baby_Food</a> on r/programming</cite>
+
+The file-backed shared memory maps add novel mode `MAP_SHARED`, which means that the changes you make to the pages will be written back to the file, therefore shared with other processes.
+The decision of *when* to synchronize is left up to the memory manager, but fortunately there's a [`msync()`][msync] function to enforce the synchronization with the backing store.
+This is great for the databases, as it guarantees durability of the written data. But not everyone needs that, it's perfectly okay **not** to sync if the durability isn't required, you're not going to lose write visibility. This is thanks to the page cache, and it's good because you can use memory maps for cheap IPC for example.
+
+```c
+/* Map the contents of a file into memory (shared). */
+int fd = open(...);
+void *cat_db = mmap(NULL, file_size, PROT_READ|PROT_WRITE, MAP_SHARED, fd, 0);
+if (cat_db == (void *)-1) {
+	/* Sad cat :( */
+}
+/* Write a cat */
+char *page = (char *)cat_db;
+strcpy(page, "bob");
+/* This is going to be a durable cat. */
+msync(page, 4, MS_SYNC);
+/* This is going to be a less durable doge. */
+page = page + PAGE_SIZE;
+strcpy(page, "doge");
+msync(page, 5, MS_ASYNC);
+```
+
+Note that you can't map more bytes than the file actually has, so you can't grow it or shrink it this way. You can however create (or grow) a sparse file in advance with [`ftruncate()`][ftruncate]. The downside is, that it makes compaction harder, as the ability to punch holes through a sparse file depends both on the file system, and the platform.
+The [`fallocate(FALLOC_FL_PUNCH_HOLE)`][fallocate] on Linux is your best chance, but the most portable (and easiest) way is to make a copy of the file without the trimmed stuff.
+
+```c
+/* Resize the file. */
+int fd = open(...);
+ftruncate(fd, expected_length);
+```
+
+Accessing a file memory map doesn't exclude using it as a file either. This is useful for implementing a split access, where you map the file read only, but write to the file using a standard file API. This is good for security (as the exposed map is write-protected), but there's more to it. The [`msync()`][msync] implementation is not defined, so the `MS_SYNC` may very well be just a sequence of synchronous writes. *Yuck.* In that case, it may be faster to use a regular file APIs to do an asynchronous [`pwrite()`][pwrite] and [`fsync() / fdatasync()`][fsync] for synchronisation or cache invalidation.
+
+As always there is a caveat &mdash; the system has to have a *unified buffer cache*. Historically, a page cache and block device cache *(raw blocks)* were two different things. This means that writing to a file using a standard API and reading it through a memory map is not coherent (a fancy way to say you're going to get different data), unless you invalidate buffers after each write. *Uh oh.* On the other hand, you're in luck unless you're running OpenBSD.
+
+#### Copy-on-write
+
+So far this was about shared memory mapping. But you can use the memory mapping in another way &mdash; to map a shared copy of a file, and make modifications without modifying the backing store. Note that the pages are not duplicated immediately, that wouldn't make sense, but in the moment you modify them. This is not only useful for forking processes or loading shared libraries, but also for working on a large set of data in-place, from multiple processes at once.
+
+```c
+int fd = open(...);
+
+/* Copy-on-write cat */
+void *cat_db = mmap(NULL, file_size, PROT_READ|PROT_WRITE, MAP_PRIVATE, fd, 0);
+if (cat_db == (void *)-1) {
+	/* Sad cat :( */
+}
+```
+
+#### Zero-copy streaming
+
+Since the file is essentially a memory, you can stream it to pipes (that includes sockets), zero-copy style. Unlike the [`splice()`][splice], this plays well with the copy-on-write modification of the data. *Disclaimer: This is for Linux folks only!*
+
+```c
+int sock = get_client();
+struct iovec iov = { .iov_base = cat_db, .iov_len = PAGE_SIZE };
+int ret = vmsplice(sock, &iov, 1, 0);
+if (ret != 0) {
+	/* No streaming catz :( */
+}
+```
+
+#### When mmap() isn't the holy grail
+
+There are pathological cases where mmapping a file is going to be much worse than the usual approach. A rule of thumb is that handling a page fault is slower than simply reading a file block, on the basis that it has to read the file block *and* do something more. In reality though, mmapped I/O may be faster as it avoids double or triple caching of the data, and does read-ahead in the background. But there are times when this is going to hurt. One such example is "small random reads in a file larger than available memory". In this case the system reads ahead blocks that are likely not to be used, and each access is going to page fault instead. You can combat this to a degree with [`madvise()`][madvise].
+
+Then there's TLB thrashing. Translation of each virtual page to a frame is hardware-assisted, and the CPU keeps a cache of latest translations &mdash; this is the Translation Lookaside Buffer. A random access to a larger number of pages than the cache can hold inevitably leads to *"thrashing"*, as the system has to do the translation by walking the page tables. For other cases, the solution is to use [huge pages][hugepages], but it's not going to cut it, as loading *megabytes* worth of data just to access a few odd bytes has even more detrimental effect.
+
+## Understanding memory consumption
+
+>*Utility belt:*
+>
+>* [`vmtouch` - portable virtual memory toucher][vmtouch]
+
+The concept of shared memory renders the traditional approach &mdash; measuring resident size &mdash obsolete, as there's no just quantification on the amount exclusive for your process. That leads to confusion and horror, which can be two-fold:
+
+> With mmap'd I/O, our *app* now uses almost zero memory. It feeds on light. &mdash; CorporateGuy
+>
+> Helpz! My process writing to shared map leaks so much memory!!1 &mdash; HeavyLifter666
+
+There are two states of pages, `clean` and `dirty`. The difference is that a dirty page has to be flushed to permanent storage before
+it can be reclaimed. The `MADV_FREE` advice uses this as a cheap way to free memory just by clearing the dirty bit instead of updating the page
+table entry. In addition, each page can be either `private` or `shared`, and this is where things get confusing.
+
+Both claims are [sort of] true, depending on the perspective.
+If a process makes memory manager to read pages into the buffer cache, does that count as memory consumption?
+On the other hand, if the process writes non-anonymous pages that end up in the buffer cache, does that count towards memory consumption?  
+How to make something out of this madness?
+
+Imagine a process, *the_eye*, writing to the shared map of mordor.
+Writing to the shared memory doesn't count towards Rss, right?
+
+```bash
+$ ps -p $$ -o pid,rss
+  PID   RSS
+17906 1574944 # <-- WTF?
+```
+
+#### PSS (Proportional Set Size)
+
+This is as fair as we can get when talking about memory. Proportional Set Size counts the private maps and adds a *portion* of the shared maps.
+The *"portion"* meaning a shared map size divided by number of processes sharing it. Is that so? Let's see an example, we have an application that does read/write to a shared memory map.
+
+```bash
+$ cat /proc/$$/maps
+00400000-00410000 r-xp 00000000 08:03 1442958            /tmp/the_eye
+00bda000-01a3a000 rw-p 00000000 00:00 0                  [heap]
+7efd09d68000-7f0509d68000 rw-s 00000000 08:03 4065561    /tmp/mordor.map
+7f0509f69000-7f050a108000 r-xp 00000000 08:03 2490410    /lib/x86_64-linux-gnu/libc-2.19.so
+7f050a52a000-7f050a52b000 rw-p 00018000 08:03 2490396    /lib/x86_64-linux-gnu/libpthread-2.19.so
+7fffdc9df000-7fffdca00000 rw-p 00000000 00:00 0          [stack]
+... snip ...
+```
+
+[Here's][smaps] the documentation, *massively* comprehensive. Here's the simplified breakdown of each map, the first column is the address range, the second is permissions information, where `r` stands for *read*, `w` stands for *write*, `x` means *executable* &mdash; so far the classic stuff &mdash; `s` is *shared* and `p` is *private*. Then there's offset, device, inode, and finally a *pathname*.
+
+I've snipped the not-so-interesting bits from the output. Read [FAQ (Why is "strict overcommit" a dumb idea?)][landley-faq] if you're interested why the shared libraries are mapped as private, but it's the map of mordor that interests us. Let's follow the white rabbit:
+
+```bash
+$ grep -A12 mordor.map /proc/$$/smaps
+Size:           33554432 kB
+Rss:             1557632 kB
+Pss:             1557632 kB
+Shared_Clean:          0 kB
+Shared_Dirty:          0 kB
+Private_Clean:   1557632 kB
+Private_Dirty:         0 kB
+Referenced:      1557632 kB
+Anonymous:             0 kB
+AnonHugePages:         0 kB
+Swap:                  0 kB
+KernelPageSize:        4 kB
+MMUPageSize:           4 kB
+Locked:                0 kB
+VmFlags: rd wr sh mr mw me ms sd
+```
+
+Private pages on a shared map &mdash; *what am I, a wizard?* On Linux, even a shared memory is counted as private unless it's actually shared. Let's see if it's in the buffer cache:
+
+```bash
+# Seems like the first part is...
+$ vmtouch -m 64G -v mordor.map
+[OOo                                                         ] 389440/8388608
+
+           Files: 1
+     Directories: 0
+  Resident Pages: 389440/8388608  1G/32G  4.64%
+         Elapsed: 0.27624 seconds
+# Let's load it in the cache!
+$ cat mordor.map > /dev/null
+$ vmtouch -m 64G -v mordor.map
+[ooooooooooooooooooooooooooooooo             oooooooooOOOOOOO] 2919606/8388608
+
+           Files: 1
+     Directories: 0
+  Resident Pages: 2919606/8388608  11G/32G  34.8%
+         Elapsed: 0.59845 seconds
+# It doesn't fit whole, nevermind... how's our process?
+ps -p $$ -o pid,rss
+  PID   RSS
+17906 286584
+```
+
+Whoa, simply reading a file gets it cached? A common misconception is that mapping a file consumes memory, whereas reading it does not. One way or another the pages from that file are going to get in the buffer cache. There is only a minor difference, a process has to create the page table entries with mmap, but the pages themselves are shared. Interestingly our process Rss shrinked, as there was *a demand* for the process pages.
+
+#### Sometimes all of our thoughts are misgiven
+
+The file-backed memory is always reclaimable, the only difference between dirty and clean &mdash; the dirty memory has to be cleaned before it can be reclaimed. So should you panick when a process consumes a lot of memory in `top`?
+Start panicking (mildly) when a process has a lot of anonymous dirty pages &mdash; these can't be reclaimed. If you see a very large growing anonymous mapping segment, you're probably in trouble *(and make it double)*. But the Rss or even Pss is not to be blindly trusted.
+
+Another common mistake is to assume any relation between the process virtual memory and the memory consumption, or even treating all memory maps equally.
+Any reclaimable memory, is as good as a free one. To put it simply, it's not going to fail your next memory allocation, but it *may* increase latency &mdash; let me explain.
+
+The memory manager is making hard choices about what to keep in the physical memory, and what not. It may decide to page out a part of the process memory to swap in favour of more space for buffers, so the process has to page in *that* part on the next access.
+Fortunately it's usually configurable. For example, there is an option called [swappiness][swappiness] on Linux, that determines when should the kernel start
+paging out anonymous memory. A value of `0` means *"until abso-fucking-lutely necessary"*.
+
+## An end, once and for all
+
+If you got here, I salute you! I started this article as a break from actual work, in a hope that simply explaining a *thousand times* explained concepts in a more accessible way is going to help me to organize thoughts, and help others in the process. It took me longer than expected. Way more.
+
+I have nothing but utmost respect for writers, as it's a tedious hair-pulling process of neverending edits and rewrites. Somewhere, Jeff Atwood has said that the best book about learning how to code is the one about building houses. I can't remember where it was, so I can't quote it. I could only add, that book about writing comes next. After all, that's programming in it's distilled form &mdash; writing stories, clear an concise.
+
+### Appendices
+
+#### <a name="appendix1" /> Appendix 1: what is cache/page colouring?
+
+I'd like to honestly know who coined the term, if you know, let me know! The idea is that adjacent addresses in the *physical memory* map to to different
+cache lines in (CPU) cache. This is great, because access to adjacent memory won't thrash your cache line and hurt the performance. How?
+Let's assume that the cache line size is 64B, you're going to do following:
+
+```c
+char *page_cats = get_page();
+char *page_doge = get_page();
+memcpy(page_cats, page_doge, 64);
+```
+
+Now, coloring-unaware allocator would give you two physical pages without checking whether the pages share the same cacheline or not.
+This is called *false sharing*, or *cache aliasing*. To make it something tangible, Drepper [shows][drepper-cache] the effect of cache line miss
+in terms of CPU cycles:
+
+> Register: less than 1 cycle, 
+> L1d: ~3 cycles, 
+> L2: ~14 cycles, 
+> Main Memory: ~240 cycles
+>
+> &mdash; <cite>Ulrich Drepper: <a href="http://lwn.net/Articles/252125/">What every programmer should know about memory; CPU caches</a></cite>
+
+Back to the example, for each copied chunk, the shared cacheline would have to alternate between *cats* and *doges* like a psycho.
+*However*, a colour-aware allocator would map the two virtual pages to two physical pages of **different** colour, so that the *cat* and *doge* would map
+to a different cacheline.
+
+Great, but that's a VMA's job. It used to make sense to do colouring in virtual pages as well, but now you can presume the virtual pages
+are already coloured. Less work, more fun.
+
+[so-drepper]: http://stackoverflow.com/questions/8126311/what-every-programmer-should-know-about-memory
+[drepper-cache]: http://lwn.net/Articles/252125/
+[linux-overcommit]: https://www.kernel.org/doc/Documentation/vm/overcommit-accounting
+[linux-oom]: http://www.win.tue.nl/~aeb/linux/lk/lk-9.html#ss9.6
+[linux-mmap]: http://lxr.free-electrons.com/source/arch/mm/mmap.c
+[linux-mmap-topdown1]: http://lxr.free-electrons.com/source/mm/mmap.c#L1953
+[linux-mmap-topdown2]: http://lxr.free-electrons.com/source/arch/x86/mm/mmap.c#L113
+[alloca]: http://linux.die.net/man/3/alloca
+[getrlimit]: http://linux.die.net/man/2/getrlimit
+[sigaltstack]: http://linux.die.net/man/2/sigaltstack
+[splitstack-gcc]: https://gcc.gnu.org/wiki/SplitStacks
+[splitstack-clang]: http://llvm.org/releases/3.0/docs/SegmentedStacks.html
+[splitstack-anastasopoulos]: http://agis.io/2014/03/25/contiguous-stacks-in-go.html
+[sbrk]: http://linux.die.net/man/2/sbrk
+[malloc]: http://linux.die.net/man/3/malloc
+[malloc-trim]: http://linux.die.net/man/3/malloc_trim
+[malloc-implementation]: http://en.wikibooks.org/wiki/C_Programming/C_Reference/stdlib.h/malloc#Implementations 
+[duarte-anatomy]: http://duartes.org/gustavo/blog/post/anatomy-of-a-program-in-memory/
+[memalign]: http://linux.die.net/man/3/posix_memalign
+[bonwick94]: https://www.usenix.org/legacy/publications/library/proceedings/bos94/full_papers/bonwick.a
+[slab-knot]: https://github.com/CZNIC-Labs/knot/blob/1.5/src/common-knot/slab/slab.h
+[slab-glib]: https://developer.gnome.org/glib/stable/glib-Memory-Slices.html
+[knot-dns]: https://github.com/CZNIC-Labs/knot
+[so-roundpgsize]: http://stackoverflow.com/a/2601527/4591872
+[duartes-kernelmem]: http://duartes.org/gustavo/blog/post/how-the-kernel-manages-your-memory/
+[obstack]: http://www.gnu.org/software/libc/manual/html_node/Obstacks.html
+[mlock]: http://linux.die.net/man/2/mlock
+[madvise]: http://linux.die.net/man/2/madvise
+[msync]: http://linux.die.net/man/2/msync
+[sysconf]: http://linux.die.net/man/3/sysconf
+[mincore]: http://linux.die.net/man/2/mincore
+[shmat]: http://linux.die.net/man/2/shmat
+[pwrite]: http://linux.die.net/man/2/pwrite
+[fsync]: http://linux.die.net/man/2/fsync
+[fallocate]: http://linux.die.net/man/2/fallocate
+[ftruncate]: http://linux.die.net/man/2/ftruncate
+[splice]: http://linux.die.net/man/2/splice
+[vmsplice]: http://linux.die.net/man/2/vmsplice
+[madvise-behavior]: http://lwn.net/Articles/591214/
+[vmtouch]: http://hoytech.com/vmtouch/
+[smaps]: https://www.kernel.org/doc/Documentation/filesystems/proc.txt
+[landley-faq]: http://landley.net/writing/memory-faq.txt
+[swappiness]: http://en.wikipedia.org/wiki/Swappiness
