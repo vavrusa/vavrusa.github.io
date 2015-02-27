@@ -1,10 +1,10 @@
 # Site settings
-title:       Pixyll
-email:       your_email@example.com
-author:      John Otander
-description: "A simple, beautiful theme for Jekyll that emphasizes content rather than aesthetic fluff."
+title:       Marek Vavrusa
+email:       marek@vavrusa.com
+author:      Marek Vavrusa
+description: "I'm a traveler in time and space."
 baseurl:     ""
-url:         "http://pixyll.com"
+url:         "http://marek.vavrusa.com"
 
 # Google analytics
 google_analytics:
@@ -16,15 +16,15 @@ show_post_footers:  false
 
 # Disqus post comments
 # (leave blank to disable Disqus)
-disqus_shortname:
+disqus_shortname: vavrusa
 
 # Social icons
-show_social_icons: false
-github_username:
-stackoverflow_id:
-twitter_username:
+show_social_icons: true
+github_username: vavrusa
+stackoverflow_id: 4591872/marek-vavrusa
+twitter_username: vavrusam
 google_plus_id:
-linkedin_username:
+linkedin_username: vavrusam
 bitcoin_url:
 paypal_url:
 flattr_button:
