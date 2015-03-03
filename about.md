@@ -1,19 +1,15 @@
 ---
 layout: page
-title: About Pixyll
+title: About
 permalink: /about/
 ---
 
-This Jekyll theme was crafted with <3 by [John Otander](http://johnotander.com)
-([@4lpine](https://twitter.com/4lpine)).
+I'm a software developer & bioinformatician. I've been seeking challenges since I was a child poking the electrical sockets. That didn't last me for a long time, so I fell in love with systems programming. From designing the architecture, through development, to maintaining and community interaction. A couple years later I began to think about
+the real world impact of my work, and immersed myself in bioinformatics. Oh the joy building bridges.
 
-Checkout the [Github repository](https://github.com/johnotander/pixyll) to download it,
-request a feature, report a bug, or contribute. It's free, and open source
-([MIT](http://opensource.org/licenses/MIT)).
+> *"Coffee: the finest organic suspension ever devised. It's got me through the worst of the last three years.
+> I beat the Borg with it."*
+>
+> &mdash; Kathryn Janeway
 
-Thanks to the following:
-
-* [BASSCSS](http://basscss.com)
-* [Jekyll](http://jekyllrb.com)
-* [Refills](http://refills.bourbon.io/)
-* [Solarized](http://ethanschoonover.com/solarized)
+When I'm not working, you can find me sipping on coffee or running around the nearby hills. Or both. I love endurance sports, classic rock, [I've cycled quite a bit](http://www.crazyguyonabike.com/directory/?user=zerolycra), oh and don't get me started about board games. Anyway, nobody cares about that, I get it.
