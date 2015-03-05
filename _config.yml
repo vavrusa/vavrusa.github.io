@@ -1,7 +1,8 @@
 # Site settings
-title:       Marek Vavrusa
+name:        "Marek Vavrusa"
+title:       "Marek Vavrusa"
 email:       marek@vavrusa.com
-author:      Marek Vavrusa
+author:      "Marek Vavrusa"
 description: "I'm a traveler in time and space."
 baseurl:     ""
 url:         "http://marek.vavrusa.com"
