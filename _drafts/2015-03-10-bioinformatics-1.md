@@ -4,13 +4,18 @@ published: false
 
 ## Practical Biology for software developers, part 1
 
-> The older I get, the more I believe that the only way to become a better programmer is by not programming.
-> - "[How to become a better programmer by not programming](http://blog.codinghorror.com/how-to-become-a-better-programmer-by-not-programming/)"
+> <cite>"The older I get, the more I believe that the only way to become a better programmer is by not programming."</cite>
+>
+> - Jeff Atwood, [How to become a better programmer by not programming](http://blog.codinghorror.com/how-to-become-a-better-programmer-by-not-programming/)
 
 Copying is innovation and innovation is copying. Engineering disciplines often take a cue from traits and patterns found in living beings.
 
-> ![]({{site.baseurl}}/http://www.bloomberg.com/image/ib9JnQnKe6jE.jpg)
-> HIROMI OKANO/CORBIS; WEST JAPAN RAILWAY CO. VIA BLOOMBERG
+
+<p style="text-align:center">
+<img src="http://www.bloomberg.com/image/ib9JnQnKe6jE.jpg"/>
+<br />
+<cite>HIROMI OKANO/CORBIS; WEST JAPAN RAILWAY CO. VIA BLOOMBERG</cite>
+</p>
 
 Eiji Nakatsu, an engineer at the JR-West rail company, redesigned the the nose of the train by the beak of the kingfisher to reduce drag and noise. It's an engineering feat that would otherwise take numerous simulations and incremental optimisations.
 While it's false to think that nature always has the best answers to man-made problems, it simply had more time to figure out what does and doesn't work.
@@ -21,8 +26,9 @@ This series of articles is going to be a collection of observations applied to d
 An organism is, depending on who do you ask, a system of autonomous units called *[cells][cell-theory]* which in some way promote reproduction or some other method of survival. The key thing is that they form a *semi-closed* system, that means they're not ignorant of what's going outside and they can interact with each other. Compare this to a function with a state (first-class function), or an object in computer languages. These tiny objects can *differentiate* (and *dedifferentiate*) depending on the environment and signalization mechanisms. This is a fancy way to say they can be refit for various tasks, just like the objects in prototype-based languages, such as JavaScript or Lua.
 This is probably the **most** important pattern in organisms, even on the macroscopic level, responsible for the resiliency and aptitude to survive. It shows how the organisms deal with failures - a malfunctioning cell triggers a "[programmed cell death][apoptosis]", a cell takes one for the team.
 
-> In an increasingly multi-core world, the ability to isolate the processes as well as shield each open tab from other misbehaving pages alone proves that Chrome has a significant performance edge over the competition. In fact, it is important to note that most other browsers have followed suit, or are in the process of migrating to similar architecture.
-> - [High Performance Networking in Chrome, The Many Facets of Performance](http://www.aosabook.org/en/posa/high-performance-networking-in-chrome.html)
+> <cite>"In an increasingly multi-core world, the ability to isolate the processes as well as shield each open tab from other misbehaving pages alone proves that Chrome has a significant performance edge over the competition. In fact, it is important to note that most other browsers have followed suit, or are in the process of migrating to similar architecture."</cite>
+>
+> - Ilya Grigorik, [High Performance Networking in Chrome, The Many Facets of Performance](http://www.aosabook.org/en/posa/high-performance-networking-in-chrome.html)
 
 Google Chrome design copied copied this pattern in time of the threaded browsers, and it paid off. In fact it goes even farther with *[zygote][zygote-chrome]* process.
 A *zygote* is a cell containing a complete genetic information, formed from two reproduction cells called *gametes*. Similarly, the zygote process opens all files and performs some initialization, and then it can be `fork()`-ed as needed, with all the information already in place.
@@ -43,9 +49,11 @@ I'm going to stop here. What we don't have is a "CPU reference manual" to deciph
 
 ### ZigBee and the waggle dance
 
-<iframe width="560" height="315" src="https://www.youtube.com/embed/2S-ozxpIrdI" frameborder="0" allowfullscreen></iframe>
-
 Swarming animals leverage simple patterns for communication, and provide a good model in the age of anycast network routing, containers, clusters and IoT. The problem of foraging bees is glaringly similar to a man-made problem of cost and routing in the computer networks. The foragers communicate not only the distance and orientation of the food source, but also its quality through a dance. This motivates other foragers to switch to the current best food source, and dance in return to motivate even more workers.
+
+<p style="text-align:center">
+<iframe width="560" height="315" src="https://www.youtube.com/embed/2S-ozxpIrdI" frameborder="0" allowfullscreen></iframe>
+</p>
 
 The ZigBee protocol borrowed not only it's name from the apis, but also the behavior of the repeater radios in an electronic Zigbee network.
 
