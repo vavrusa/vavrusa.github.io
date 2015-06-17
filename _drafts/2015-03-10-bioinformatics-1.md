@@ -24,10 +24,10 @@ This is probably the **most** important pattern in organisms, even on the macros
 Google Chrome design copied copied this pattern in time of the threaded browsers, and it paid off. In fact it goes even farther with *[zygote][zygote-chrome]* process.
 A *zygote* is a cell containing a complete genetic information, formed from two reproduction cells called *gametes*. Similarly, the zygote process opens all files and performs some initialization, and then it can be `fork()`-ed as needed, with all the information already in place.
 
+### Disassembling our code
+
 Producing "code" is a discipline that requires critical thinking combined with language skills and plain old engineering. The language part sets it apart from other engineering disciplines like construction or electric engineering. We often say: "I'm a C guy" or "He's a Clojure ninja", but why is the dialect we speak on the front page more often than what we can do with the language? Computer languages, just like natural languages, differ in expressiveness, number of speakers, idioms and trends.
 But all the languages have one thing in common - they are always translated to a language that computers can understand, a machine code. As this is essentially a one-way process, the computer languages do not have to encode colour, emotions nor secondary meanings. They're confusing for us because the semantics is for computer, byt syntax for humans.
-
-### Disassembling our code
 
 Since the advent of the DNA sequencing and central dogma, we've been curious what's *our* code. The [Human Genome Project][hgp] was declared complete more than a decade ago now, but it's just the first step. A genetic information is included in our cells containing a *nucleus*, a core. It's very tiny of course and it's [packed very tightly to fit][dna-packaging], which makes it impractical to read.
 Fortunately it also encodes a machinery to unravel it, clone it, fill it and cut it.
