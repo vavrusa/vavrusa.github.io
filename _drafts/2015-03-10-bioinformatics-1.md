@@ -2,16 +2,19 @@
 published: false
 ---
 
-
-
-
-
-## Practical Biology for software developers
-
-I have started tinkering with the software at the age of fourteen, and while I wasn't particulary good at it, I was **astonished** by how one can create things out of a thin air. Dynamic web pages were the thing, so I got a book about PHP3 and made a CMS. I was into computer games as well, and when a one well-known MMORPG *(totally not World of Warcraft)* came out, I wanted to play. I wanted to play so bad, but I didn't have the cash, so I started working on an open-source server instead. There was something compelling about a world that almost felt alive, it was a software I **wanted** to do so much, that I've learned C++ because of it. Why?
+## Practical Biology for software developers, part 1
 
 > The older I get, the more I believe that the only way to become a better programmer is by not programming.
 > - "[How to become a better programmer by not programming](http://blog.codinghorror.com/how-to-become-a-better-programmer-by-not-programming/)"
+
+Copying is innovation and innovation is copying. Engineering disciplines often take a cue from traits and patterns found in living beings.
+
+> ![]({{site.baseurl}}/http://www.bloomberg.com/image/ib9JnQnKe6jE.jpg)
+> HIROMI OKANO/CORBIS; WEST JAPAN RAILWAY CO. VIA BLOOMBERG
+
+Eiji Nakatsu, an engineer at the JR-West rail company, redesigned the the nose of the train by the beak of the kingfisher to reduce drag and noise. It's an engineering feat that would otherwise take numerous simulations and incremental optimisations.
+While it's false to think that nature always has the best answers to man-made problems, it simply had more time to figure out what does and doesn't work.
+This series of articles is going to be a collection of observations applied to different problems in computer sciences, through the eyes of a software developer.
 
 ### The Many Facets of Performance
 
@@ -36,11 +39,15 @@ Using it enabled all kinds of sequencing methods, notably [shotgun sequencing][s
 Quick facts that we know - compared to binary code, genetic information is encoded in a sequence of 4 basic base pairs. This has lower [radix economy][radix-economy] than a binary system. Each triplet of base pairs then encodes an amino-acid, this would have been the most economical choice if it wasn't for the fact that it's redundant. A single AA can be encoded by a multitude of triplets. CPU instructions, on the other hand, are encoded by exactly one unique sequence of bits.
 Sequences of AA form peptide chains, proteins and eventually a complexes of proteins.
 
-I'm going to stop here. What we don't have is a "CPU reference manual" to decipher the semantics of the code. For example, we can have a look in the x86 manual and see that the `ADD` instruction performs addition, this makes disassembly (and decompilation to some degree) possible, but have no such knowledge about many motifs found in the genome.
+I'm going to stop here. What we don't have is a "CPU reference manual" to decipher the semantics of the code. For example, we can have a look in the x86 manual and see that the `ADD` instruction performs addition, this makes disassembly (and decompilation to some degree) possible, but have no such knowledge about many motifs found in the genome. In order to even recognize them, we need to learn how to identify patterns first.
 
+### ZigBee and the waggle dance
 
+<iframe width="560" height="315" src="https://www.youtube.com/embed/2S-ozxpIrdI" frameborder="0" allowfullscreen></iframe>
 
+Swarming animals leverage simple patterns for communication, and provide a good model in the age of anycast network routing, containers, clusters and IoT. The problem of foraging bees is glaringly similar to a man-made problem of cost and routing in the computer networks. The foragers communicate not only the distance and orientation of the food source, but also its quality through a dance. This motivates other foragers to switch to the current best food source, and dance in return to motivate even more workers.
 
+The ZigBee protocol borrowed not only it's name from the apis, but also the behavior of the repeater radios in an electronic Zigbee network.
 
 [cell-theory]: http://www.biologyreference.com/Gr-Hi/History-of-Biology-Cell-Theory-and-Cell-Structure.html
 [apoptosis]: https://www.khanacademy.org/test-prep/mcat/biomolecules/Krebs-citric-acid-cycle-and-oxidative-phosphorylation/v/mitochondria-apoptosis-oxidative-stress
