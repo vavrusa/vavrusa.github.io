@@ -36,6 +36,9 @@ A *zygote* is a cell containing a complete genetic information, formed from two 
 ### Disassembling our code
 
 Producing "code" is a discipline that requires critical thinking combined with language skills and plain old engineering. The language part sets it apart from other engineering disciplines like construction or electric engineering. We often say: *"I'm a C guy"* or *"He's a Clojure ninja"*, but why is the dialect we speak so important at all? Computer languages, just like natural languages, differ in expressiveness, number of speakers, idioms and trends.
+
+> <cite>"The big picture is lost in the process"</cite>
+
 But all the languages have one thing in common - they are, in the end, translated to a language that computers can understand, a machine code. As this is essentially a one-way process, the computer languages do not have to encode colour, emotions nor secondary meanings. They're confusing for us because their semantics is for computers, byt syntax for humans.
 
 Since the advent of the DNA sequencing and central dogma, we've been curious what's *our* machine code. The [Human Genome Project][hgp] was declared complete more than a decade ago now, but it's just the first step. A genetic information is included in our cells containing a *nucleus*, a core. It's very tiny of course, and also [packed very tightly to fit][dna-packaging], which makes it impractical to read. Fortunately it also encodes a machinery to unravel it, clone it, fill it and cut it. A toolkit of some sort.
