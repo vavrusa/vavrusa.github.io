@@ -30,7 +30,7 @@ This is probably the **most** important pattern found even on the macroscopic le
 >
 > - Ilya Grigorik, [High Performance Networking in Chrome, The Many Facets of Performance](http://www.aosabook.org/en/posa/high-performance-networking-in-chrome.html)
 
-Google Chrome design copied copied this pattern in time of the [threaded][^threads] browsers, and it paid off. In fact it goes even farther with the *[zygote][zygote-chrome]* process.
+Google Chrome design copied copied this pattern in time of the threaded[^threads]  browsers, and it paid off. In fact it goes even farther with the *[zygote][zygote-chrome]* process.
 A *zygote* is a cell containing a complete genetic information, formed from two reproduction cells. Similarly, the "zygote process" opens all files and performs some initialization, and then it can be `fork()`-ed as needed, with all the information already in place.
 
 ### Disassembling our code
