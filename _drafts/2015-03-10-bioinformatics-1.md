@@ -3,6 +3,7 @@ published: false
 ---
 
 
+
 ## Practical Biology for software developers, part 1
 
 > <cite>"The older I get, the more I believe that the only way to become a better programmer is by not programming."</cite>
@@ -18,11 +19,12 @@ Copying is innovation and innovation is copying. Engineering disciplines often t
 </p>
 
 Eiji Nakatsu, an engineer at the JR-West rail company, redesigned the the nose of the train by the beak of the kingfisher to reduce drag and noise. It's an engineering feat that would otherwise take numerous simulations and incremental optimisations. While it's false to think that nature always has the best answers to man-made problems, it simply had more time to figure out what does and doesn't work.
+Now you might say: *"okay, a guy really liked birds and got lucky, so what?"*, and you might be right. This series of short articles isn't about clear-cut advice, but rather a collection of observations about what makes the living things tick.
 
 ### The Many Facets of Performance
 
-An organism is, depending on who do you ask, a system of autonomous units called *[cells][cell-theory]* which in some way promote reproduction or some other method of survival. The key thing is that they form a *semi-closed* system, that means they're not ignorant of what's going outside and they can interact with each other. Compare this to a function with a state (first-class function), or an object in computer languages. These tiny objects[^stem-cells] can *differentiate* (and *dedifferentiate*) depending on the environment and signalization. This is a fancy way to say they can be refit for various tasks, just like the objects in prototype-based languages, such as JavaScript or Lua.
-This is probably the **most** important pattern, found even on the macroscopic level, responsible for resiliency and aptitude to survive. It shows how the organisms deal with failures and end-of-life states - a malfunctioning cell triggers a "[programmed cell death][apoptosis]", and takes one for the team. The real MVP. Even though there are [many safeguards][dna-repair] in cell replication, a failure is not treated as something impossible, but as a normal part of life.
+An organism is, depending on who do you ask, a system of autonomous units called *[cells][cell-theory]* which in some way promote reproduction, or other method of survival. The key thing is that they form a *semi-closed* system, that means they're not ignorant of what's going outside and they can interact with each other, but they know their boundaries. Compare this to a function with a state (first-class function), or an object in computer languages. These tiny objects[^stem-cells] can *differentiate* (and *dedifferentiate*) depending on the environment and signalization. This is a fancy way to say they can be refit for various tasks, just like the objects in prototype-based languages, such as JavaScript or Lua.
+This is probably the **most** important pattern found even on the macroscopic level, and it gives them resiliency, and aptitude to survive. It shows how the organisms deal with failures and end-of-life states - a malfunctioning cell triggers a "[programmed cell death][apoptosis]", and takes one for the team. The real MVP. Even though there are [many safeguards][dna-repair] in cell replication, a failure is not treated as something impossible, but as a normal part of life.
 
 > <cite>"In an increasingly multi-core world, the ability to isolate the processes as well as shield each open tab from other misbehaving pages alone proves that Chrome has a significant performance edge over the competition. In fact, it is important to note that most other browsers have followed suit, or are in the process of migrating to similar architecture."</cite>
 >
@@ -33,7 +35,7 @@ A *zygote* is a cell containing a complete genetic information, formed from two 
 
 ### Disassembling our code
 
-Producing "code" is a discipline that requires critical thinking combined with language skills and plain old engineering. The language part sets it apart from other engineering disciplines like construction or electric engineering. We often say: "I'm a C guy" or "He's a Clojure ninja", but why is the dialect we speak so important at all? Computer languages, just like natural languages, differ in expressiveness, number of speakers, idioms and trends.
+Producing "code" is a discipline that requires critical thinking combined with language skills and plain old engineering. The language part sets it apart from other engineering disciplines like construction or electric engineering. We often say: *"I'm a C guy"* or *"He's a Clojure ninja"*, but why is the dialect we speak so important at all? Computer languages, just like natural languages, differ in expressiveness, number of speakers, idioms and trends.
 But all the languages have one thing in common - they are, in the end, translated to a language that computers can understand, a machine code. As this is essentially a one-way process, the computer languages do not have to encode colour, emotions nor secondary meanings. They're confusing for us because their semantics is for computers, byt syntax for humans.
 
 Since the advent of the DNA sequencing and central dogma, we've been curious what's *our* machine code. The [Human Genome Project][hgp] was declared complete more than a decade ago now, but it's just the first step. A genetic information is included in our cells containing a *nucleus*, a core. It's very tiny of course, and also [packed very tightly to fit][dna-packaging], which makes it impractical to read. Fortunately it also encodes a machinery to unravel it, clone it, fill it and cut it. A toolkit of some sort.
