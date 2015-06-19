@@ -59,8 +59,10 @@ The [ZigBee protocol][zigbee] borrowed not only it's name from the apis, but als
 On the macroscopic level, a behaviour of the hive is useful for making *rule of thumb* decisions. A bread and butter for programmers. When the [hive is foraging][foraging], it has two choices - either stay with the current food source or scout for a better one, which may or may not pay off. The waggle dance of the returning forager communicates the direction to the food source, and an integrated travel length (cost). Based on the net gain, it might recruit more foragers based on several other constraints.
 
 * Foragers stay true to their food source of choice until it worsens its quality.
-* More than 3/4 of the foragers prefer to stay in their comfortable distance, and only few experienced ones fly farther.
+* More than 3/4 of the foragers prefer to stay in their comfortable distance (1/10 - 1/4 of the range), and only few experienced ones fly farther.
 * The amount of foraging activity is limited by environment.
+
+TODO: img here
 
 The same choice paralysis problem exists in computer networking software, where instead of food we're chosing servers for the next hop. The question is always - did we pick the fastest server, and what if something changed meanwhile? What if our choice fails? A good rule of thumb is to stick with the best performing server (in the range) with at least 3/4 probability *(fidelity)*. If not, try different server with the probability proportional to it's known quality *(scouting)*. Back off if all servers are consistently bad *(weather)*.
 
@@ -68,7 +70,11 @@ This simple *rule of thumb* algorithm shows both fast response time to changes a
 
 ## Paterns revisited
 
-I feel that programmers, well... at least me, are sometimes too burdened with the need to make everything right on the first try, and yet it rarely ever works. If it did, there would be no need for versioning or patches. We're ashamed when the coding standard is not good enough, about the `printf("swearword")` debugging strategy, copypasta code. It hurts our pride. Yet even an imperfect model can reveal a lot of important clues about how to make the *final version* suck less. That's why the builders build models and scientists experiment. Looking at the successful patterns in life can help us understand why approaches live or fail before we even start building the model.
+I feel that I'm sometimes too burdened with the need to make everything right on the first try, and yet it rarely ever works. If it did, there would be no need for versioning or patches. I'm ashamed when the coding standard is not good enough, about the `printf("swearword")` debugging strategy, copypasta code. I'm a programmer. It hurts *our* pride. Yet even an imperfect model can reveal a lot of important clues about how to make the *final version* suck less. That's why the builders build models and scientists experiment.
+
+Looking at the successful patterns in life can help us understand why approaches live or die, from the lowest level of celular life, making sense of the genetic code, to behaviour analysis of animals.
+Now I turn it up to you, readers, if there's some part that interests you more - fire away.
+
 
 [^mapping]: Figuring out where to place the sequence fragment on the chromosome.
 [^stem-cells]: These cells are called "stem cells", they're special because they have the potential to become *anything*. You might have heard about these because of the stem cell therapy, a transplantation of these cells.
