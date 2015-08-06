@@ -192,11 +192,9 @@ end
 
 I have extended this example with additional methods for access to [YIADDR and CHADDR][dhcp-fields]
 fields in the DHCP message, so we have something to work with. `CHADDR` represents client's hardware address,
-and `YIADDR` the address that we're going to lease. You can find the whole code in this gist.
+and `YIADDR` the address that we're going to lease. You can find the whole code [in this gist](https://gist.github.com/vavrusa/7c4b02ac2e4714358273).
 
-<script src="https://gist.github.com/vavrusa/7c4b02ac2e4714358273.js"></script>
-
-Let's write some server logic in the Lua world now. Let's say we want to remember the leases of various clients,
+With this we can write some server logic in the Lua world now. Let's say we want to remember the leases of various clients,
 and create new leases for unknown clients. We also want to do some ACLs on hardware address, because Lua is fun.
 
 ```lua
@@ -242,15 +240,14 @@ $ time ./luatest test.lua
 real	0m1.274s
 ```
 
-Napkin calculations tell me this is fairly quick, but nowhere near the C speed. Let's have a look at the debugging and profiling facilities of LuaJIT.
+Napkin calculations tell me this is "okay quick", but nowhere near the C speed. What to do?
 
 ### It's feels slow, what should I do?
 
-The bad news is that idiomatic code may or may not be predictably fast like in compiled languages. The good news is that LuaJIT has excellent facilities to find out the cause.
+The bad news is that idiomatic code may or may not be predictably fast like in the compiled languages, which is what makes Lua infuriating
+at times. Alas "engineering" in the software engineering is about understanding what's going on, and the good news is that LuaJIT has excellent facilities to assist you with finding the root cause. Usually there is something preventing trace compilation or excessive garbage collection.
 
-#### Turning off JIT
-
-There might be a problem with JITing itself, first thing you can do is to disable it and observe.
+First thing you can do is to disable JIT and observe.
 
 ```bash
 $ echo "jit.off()" >> test.lua
@@ -259,10 +256,13 @@ real	0m0.603s
 ```
 
 Wow, that's roughly half the time it took with JIT enabled. There are two diagnostic tools available - `jit.v` and `jit.dump`.
+I'm going to start with the first one, as the latter one falls into *"profiling"* in my mind. Notice that despite the absence of
+trace compiler, it's already churning close to 1.5M calls per second.
 
-#### Running JIT in verbose mode
+### Tracing the tracer
 
-Module `jit.v` is able to print events happening in the JIT to either a file or stdout. It report trace aborts, transitions or any other obstructions to that toasty traces. You can enable it with a simple require, first re-enable the JIT that we turned off and run verbose.
+Module `jit.v` is able to print events happening in the JIT to either a file or stdout. It report trace aborts, transitions or any other obstructions to that toasty traces. You can enable it with a simple `require()`.
+First re-enable the JIT that we turned off and run verbose.
 
 ```bash
 $ echo "require('jit.v').start()" >> test.lua
@@ -272,10 +272,29 @@ $ time ./luatest test.lua
 [TRACE flush]
 [TRACE flush]
 [TRACE flush]
-...
+... bazillion times ...
 ```
 
-That's a lot of trace flushes and the reason why it's so slow. It also happens somewhere out of Lua scope, so it must be in our C code. The problem here is that we push metatables to userdata objects, forcing the JIT to flush the code cache. Another common problem is doing [NYI operations][luajit-nyi] which cause trace aborts. This is especially costly, as the 
+That's a lot of trace flushes and the reason why it's so slow. It also happens somewhere out of Lua scope, so it must be in our C code. The problem here is that we push metatables to userdata objects, forcing the JIT to flush the code cache. Another common problem is doing [NYI operations][luajit-nyi] which cause trace aborts. This is especially costly, as the tracer does a lot of work in background which never comes to fruition.
+
+Now we're left with two choices, rewrite our C API without metatables - e.g. `buf:op()` would become `dhcp.op(buf)`, or rewrite it using LuaJIT FFI. First choice is portable between different Lua flavours, but C calls would still abort traces (as [they're NYI][luajit-nyi]).
+The second choice locks us to LuaJIT. Since this is a tutorial, I'm going to show you how to rewrite the current bindings using FFI.
+
+### FFI bindings to your C code
+
+@TBD@
+
+### Profiling
+
+@TBD@
+
+### Writing performant code with LuaJIT in mind
+
+@TBD@
+
+References:
+
+* [Numerical Computing Performance Guide][luajit-perfguide]
 
 [lua-infuriating]: http://www.slideshare.net/jgrahamc/lua-the-worlds-most-infuriating-language
 [lua-15min]: http://tylerneylon.com/a/learn-lua/
@@ -296,3 +315,4 @@ That's a lot of trace flushes and the reason why it's so slow. It also happens s
 [luajit-nyi]: http://wiki.luajit.org/NYI
 [luajit-pcall-overhead]: http://lua-users.org/lists/lua-l/2006-10/msg00369.html
 [luajit-shortcall]: http://lua-users.org/lists/lua-l/2011-02/msg00421.html
+[luajit-perfguide]: http://wiki.luajit.org/Numerical-Computing-Performance-Guide
