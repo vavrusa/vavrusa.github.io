@@ -55,7 +55,14 @@ int main(int argc, char *argv[])
 
 ```
 
-And compile it (add `-pagezero_size 10000 -image_base 100000000` to `cc` for [LuaJIT on OS X][luajit-install], section "Embedding LuaJIT").
+There are 4 bread & butter interactions with the Lua world that you can see here.
+
+* (1) is calling Lua to execute a chunk of code (a *protected* call)
+* (2) getting Lua values on Lua stack
+* (3) reading out Lua values from Lua stack
+* (4) stack manipulation
+
+Let's go straight for the test phase. Don't forget to add `-pagezero_size 10000 -image_base 100000000` for [LuaJIT on OS X][luajit-install], see section "Embedding LuaJIT").
 
 ```bash
 $ cc $(pkg-config --cflags --libs luajit) luatest.c -o luatest
@@ -66,15 +73,9 @@ $ ./luatest test.lua
 address: 255.255.255.255, port: 67
 ```
 
-Awesome! It reads our configuration with just few lines of code. There are 4 bread & butter interactions
-with the Lua world that you can see here.
+All clear mission. It reads our configuration with just few lines of code. 
 
-* (1) is calling Lua to execute a chunk of code (a *protected* call)
-* (2) getting Lua values on Lua stack
-* (3) reading out Lua values from Lua stack
-* (4) stack manipulation
-
-The [stack][lua-stack] is a bit difficult to wrap your head around first, but it boils down to this: stack top, the last pushed value, is always -1. If we push something, it becomes the new stack top. If we call a function, it unwinds the stack and pushed elements become arguments (or upvalues). Once again - pushed values are negative, function arguments positive.
+Back to the code, the [stack][lua-stack] is the difficult bit to wrap your head around first, but it boils down to this: stack top, the last pushed value, is always -1. If we push something, it becomes the new stack top. If we call a function, it unwinds the stack and pushed elements become arguments (or upvalues). Once again - pushed values are negative, function arguments positive.
 
 If you're still not sure how this works, have a look at another ["embedding example"][embed-example] or play around a little bit with it. Links that you're going to find useful:
 
@@ -307,6 +308,7 @@ References:
 [embed-example]: http://lua-users.org/wiki/SimpleLuaApiExample
 [lua-users]: http://lua-users.org/wiki/TutorialDirectory
 [lua-yoyo]: http://pgl.yoyo.org/luai/i/lua_pcall
+[pil-config]: http://www.lua.org/pil/25.html
 [pil-registry]: http://www.lua.org/pil/27.3.1.html
 [pil-metatables]: http://www.lua.org/pil/13.html
 [dhcp]: https://tools.ietf.org/html/rfc2131
