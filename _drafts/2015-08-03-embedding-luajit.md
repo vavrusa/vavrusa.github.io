@@ -393,7 +393,7 @@ local function acl(hwaddr)
 end
 ```
 
-And trace it again.
+And try it again.
 
 ```bash
 $ time ./luatest test.lua
@@ -402,6 +402,9 @@ real	0m0.135s
 
 Whoa, this is an order of magnitude faster and `jit.dump` shows that it succeeded to find a trace for the whole callback.
 Usually there are a few aborted traces before it finds it, it's nothing to worry about.
+
+*Note* - Branches are not allowed in traces, so the compiler deals with it by spawning side traces. The [LuaJIT performance guide][luajit-perfguide] states that highly biased are *okay*, as the most likely branch is going to get compiled in the root trace.
+However here we can't presume anything about the branching. Have a look at the ["Tracing JITs and modern CPUs part 3"][luajit-badcase] for more information.
 
 Since we're close to the **8M** callbacks/s figure, we can have a look at the profile to fine tune the remaining slowdowns.
 
@@ -494,6 +497,7 @@ I also hope that this might help to attract more people to LuaJIT. Mike Pall, th
 Further tips (subject to change):
 
 * [Numerical Computing Performance Guide][luajit-perfguide]
+* [Tracing JITs and modern CPUs part 3: A bad case][luajit-badcase]
 * [high-performance packet filtering with pflua](https://wingolog.org/archives/2014/09/02/high-performance-packet-filtering-with-pflua)
 
 [kresd]: https://github.com/CZ-NIC/knot-resolver
@@ -539,3 +543,4 @@ Further tips (subject to change):
 [lua-gctips]: http://lua-users.org/wiki/OptimisingGarbageCollection
 [luajit-mlist]: http://luajit.org/list.html
 [luajit-cf]: http://www.freelists.org/post/luajit/Looking-for-new-LuaJIT-maintainers
+[luajit-badcase]: https://github.com/lukego/blog/issues/8
