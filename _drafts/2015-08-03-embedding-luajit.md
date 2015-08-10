@@ -1,22 +1,24 @@
 ---
-published: false
+layout: post
+title: Embedding LuaJIT in 30 minutes (or so)
+summary: "Why and how you can embed LuaJIT in your C application explained in layman's terms. The article covers all steps from building a small C application, extending it with Lua, to using FFI bindings. I wrote this originally for the CZ.NIC blog, and have been kindly allowed to keep it on my personal site."
+published: true
 ---
 
+Since you're reading this, you probably know Lua, the world's [most infuriating language][lua-infuriating]. If not, hop on to [Lua in 15 minutes][lua-15min] to get the basics right. Now there are two types of use cases where Lua shines - as a tiny script/configuration language, and for high-performance data processing (with JIT). I went through both of them with [kresd][kresd], and wrote down some notes.
 
-## Embedding LuaJIT in 30 minutes (or so)
+<!--more-->
 
-Since you're reading this, you probably know [Lua][lua-infuriating], probably the world's most infuriating language. If not, hop on to [Lua in 15 minutes][lua-15min] to get the basics right. Now there are two types of use cases where Lua shines - as a tiny script engine or configuration language, and as a high-performance filtering language (with JIT), I went through both of them with [kresd][kresd], so here are my notes.
+## So what's it all about?
 
-### So what's it all about?
+There is a well written book [Programming in Lua][pil-config] that covers everything from the syntax to C/Lua interfacing. If you're starting with Lua, chances are you're going to use it very often as a reference. I'm just going to sum up the basics real quick.
 
-There is a well written book [Programming in Lua][pil-config] that covers everything from the syntax to C/Lua interfacing. If you're starting with Lua, chances are you're going to often use it as a reference. I'm just going to sum up the basics real quick.
-
-Any Lua flavour will do for now, you can pick from [eLua][elua] for embedded, vanilla interpreter [Lua][lua] or [LuaJIT][luajit]. All of them compile quickly to a small (static or shared) library. Vanilla is about 200K, LuaJIT takes about twice as much. I'd recommend going with LuaJIT right off the bat, especially if you have plans for accessing C world from Lua. [Installation][luajit-install] is a cinch:
+Any Lua flavour will do for now, you can pick from [eLua][elua] for embedded, vanilla interpreter [Lua][luapg] or [LuaJIT][luajit]. All of them compile quickly to a small (static or shared) library. Vanilla is about 200K, LuaJIT takes about twice as much. I'd recommend to start with LuaJIT right off the bat, especially if you have plans for accessing C world from Lua. Installation [is a cinch][luajit-install], it's refreshing when a project uses just plain old Makefiles:
 
 ```bash
 $ make && sudo make install
 ```
-Let's make a mock-up C application to fire up the VM and read out some values.
+Let's make an small C application to initialize the VM and read out a couple values.
 
 ```c
 #include <stdio.h>
@@ -35,6 +37,7 @@ int main(int argc, char *argv[])
 	auto_lclose lua_State *L = luaL_newstate();
 	if (!L)
 		return 1;
+	luaL_openlibs(L); /* Open standard libraries */
 	/* Load config file */
 	if (argc > 1) {
 		luaL_loadfile(L, argv[1]); /* (1) */
@@ -54,35 +57,41 @@ int main(int argc, char *argv[])
 }
 ```
 
-There are four bread & butter interactions with the Lua world that you can see here:
+There are four basic interactions with the Lua world that you can see here:
 *(1)* is calling Lua to execute a chunk of code
 *(2)* getting Lua values on Lua stack
 *(3)* reading out Lua values from Lua stack
-*(4)* stack manipulation
+*(4)* stack manipulation (clear the stack)
 
-Let's go straight for the test phase. Don't forget to add `-pagezero_size 10000 -image_base 100000000` for [LuaJIT on OS X][luajit-install], see section *"Embedding LuaJIT"*).
+Let's go straight for the test phase.
+
+Don't forget to add `-pagezero_size 10000 -image_base 100000000` for [LuaJIT on OS X][luajit-install], see section *"Embedding LuaJIT"*).
 
 ```bash
-$ cc ldhcp-ex1.c $(pkg-config --cflags --libs luajit) -lm -ldl -o luatest
+$ cc ldhcp-ex1.c $(pkg-config --cflags --libs luajit) -lm -ldl
 $ cat test.lua 
 address = '255.255.255.255'
 port = 67
-$ ./luatest test.lua
+$ ./a.out test.lua
 address: 255.255.255.255, port: 67
 ```
 
 *Mission All Clear*. It reads our configuration with just a few lines of code. 
 
-Back to the example, the [stack][lua-stack] is the difficult bit to wrap your head around first, but it boils down to this: stack top, the last pushed value, is always -1. If we push something, it becomes the new stack top. If we call a function, it unwinds the stack and pushed elements become arguments (or [upvalues][lua-upval]). Once again - pushed values are negative, function arguments positive.
+The Lua [stack][lua-stack] is the difficult bit to wrap your head around first, but it boils down to this: stack top, the last pushed value, is always at index -1. If we push something, it becomes the new stack top. If we call a function, it consumes the values from the top of the stack, and the existing elements become arguments (or [upvalues][lua-upval]). Once again - pushed values are indexed with negative, function arguments with positive numbers.
 
 If you're still not sure how this works, have a look at another ["embedding example"][embed-example] guide, or play around a little bit with it. Here are links that you might find useful:
 
 * [Lua users tutorials][lua-users] - various examples and code snippets, three stars out of five.
 * [Lua reference][lua-yoyo] - well put together API reference for both Lua and Lua/C APIs, four and a half stars.
 
-### Extending C application with Lua
+## Extending C application with Lua
 
-You can call functions the same way as you interact with variables. Now that you've mastered the stack, your first idea would be to do something like this:
+Gists for this section:
+
+* [ldhcp-ex1.c][ldhcp-ex1-c]
+
+You can call functions in the same way as you interact with variables. Now that you've mastered the stack, your first idea would be to do something like this:
 
 ```c
 static int on_recv(lua_State *L, char *buf, size_t len)
@@ -100,7 +109,7 @@ static int on_recv(lua_State *L, char *buf, size_t len)
 	on_recv(L, buf, sizeof(buf));
 ```
 
-Let's try it out then with a simple function that returns the length of the argument.
+Let's try it out with a simple function that returns the length of the argument.
 
 ```bash
 $ cat test.lua
@@ -109,11 +118,10 @@ function callback(buf)
 end
 $ ./luatest test.lua
 address: 255.255.255.255, port: 67
-ret: 0, buflen: -> 512 <-
+ret: 0, buflen: 512
 ```
 
-At this point, you should start to be worried about the tiny inefficiencies. Looking up globals is relatively expensive,
-we can look later how much, but fortunately Lua has a [fast registry][pil-registry] for storing various values.
+At this point, you should start to be worried about the tiny inefficiencies. Looking up globals is relatively expensive, we can have look later how much. For now you should just know that Lua has a [fast registry][pil-registry] for storing values.
 
 ```c
 static int on_recv(lua_State *L, int cb_ref, char *buf, size_t len)
@@ -133,17 +141,22 @@ static int on_recv(lua_State *L, int cb_ref, char *buf, size_t len)
 
 This is especially helpful if you call the function repeatedly.
 
-### Extending Lua code with C
+## Extending Lua code with C
+
+Gists for this section:
+
+* [ldhcp-ex1.c][ldhcp-ex1-c]
 
 Our previous example has one problem, it has no purpose. So we'll give it one, we're going to write a tiny [DHCP][dhcp] server. DHCP is one of the Internet's most boring and yet widely used protocols whose purpose is to assign IP addresses to clients.
 
-The messages in DHCP [are binary][dhcp-msg]. Strings in Lua are immutable, so we can't just fiddle with random bytes in the packet, but we're going to call the C functions to do it for us. There are two ways to call into C - Lua/C interface and LuaJIT FFI. The former is a-okay, the latter rocks.
+The messages in DHCP [are binary][dhcp-msg]. Strings in Lua are immutable, so we can't just fiddle with random bytes in the packet, but we're going to call the C functions to do it for us. There are two ways to call into C - Lua/C interface, and the LuaJIT FFI. The former is okay, the latter rocks.
 
-The Lua/C interface can provide enough sugar coating, so that C userdata can look like a regular Lua object.
+The [metatables][pil-metatables] provide enough sugar coating, so that our C userdata looks like a regular Lua object.
 
 ```c
+/* Get/set opcode */
 static int msg_op(lua_State *L)
-{ /* Get/set opcode */
+{
 	char *msg = lua_touserdata(L, 1);
 	if (lua_isnumber(L, 2)) {
 		msg[0] = lua_tointeger(L, 2) & 0xFF;
@@ -165,9 +178,16 @@ static int msg_register(lua_State *L)
 	lua_pop(L, 1);
 	return 0;
 }
+...
+	/* Create VM state */
+	auto_lclose lua_State *L = luaL_newstate();
+	if (!L)
+		return 1;
+	luaL_openlibs(L); /* Open standard libraries */
+	msg_register(L); /* Register 'msg' meta */
 ```
 
-You can then apply [metatables][pil-metatables] to provided C userdata argument.
+You can then apply the [metatable][pil-metatables] to provided C userdata argument.
 
 ```c
 static int on_recv(lua_State *L, int cb_ref, char *buf, size_t len)
@@ -182,25 +202,22 @@ static int on_recv(lua_State *L, int cb_ref, char *buf, size_t len)
 
 From now, you can call the methods on the `buf` object from the Lua world, as if it was native.
 
-```lua
+```javascript
 function callback(buf)
 	print(buf:op())
 	return 0
 end
 ```
 
-I have extended this example with additional methods for access to [YIADDR and CHADDR][dhcp-fields]
-fields in the DHCP message, so we have something to work with. `CHADDR` represents client's hardware address,
-and `YIADDR` the address that we're going to lease. You can find the whole code [in this gist](https://gist.github.com/vavrusa/7c4b02ac2e4714358273).
+I have extended this example with methods to access [YIADDR and CHADDR][dhcp-fields] fields in a DHCP message, so we have something tangible to work with. `CHADDR` is client's hardware address,and `YIADDR` the address we're going to lease. You can find the whole code [in this gist][ldhcp-ex1-c].
 
-With this we can write some server logic in the Lua world now. Let's say we want to remember the leases of various clients,
-and create new leases for unknown clients. We also want to do some ACLs on hardware address, because Lua is fun.
+With this we can write server logic in Lua now. Let's say we want to remember existing leases, and provide new clients. We also want to do some ACLs on client's address, just because [Lua is fun][luafun].
 
-```lua
+```javascript
 address = '255.255.255.0'
 port = 67
 -- Only allow hwaddr with these prefixes
-local allowed_prefix = { '\0\0', '\5\3' }
+local allowed_prefix = { '', '\5\3' }
 local function acl(hwaddr)
     for i,v in ipairs(allowed_prefix) do
         if hwaddr:sub(0, #v) == v then
@@ -229,9 +246,7 @@ function callback(buf, len)
 end
 ```
 
-That's a pretty straightforward piece of code - few branches, and a short loop.
-Lua likes `local` variables where possible, one transgression is the overuse of metatables to keep the code short.
-Let's put it under a very crude benchmark with a loop of 1000000 packets to see how it goes.
+That's a pretty straightforward piece of code - few branches, and a short loop. `local` variables placed where possible, one small transgression is the overuse of metatables to keep the code short. Let's put it under a very crude benchmark with a loop of 1000000 packets to see how it goes.
 
 ```bash
 $ time ./luatest test.lua
@@ -240,9 +255,9 @@ real	0m1.274s
 
 Napkin calculations tell me this is "okay quick", but nowhere near the C speed.
 
-### It's feels slow, what should I do?
+## It's feels slow, what should I do?
 
-The bad news is that idiomatic code may or may not be predictably fast like in the compiled languages, which makes Lua sometimes so infuriating. Alas *"engineering"* in the software engineering is about understanding what's going on, and the good news is that LuaJIT has excellent facilities to assist you with finding the root cause. Usually, there is something preventing trace compilation or excessive garbage collection.
+The bad news is that idiomatic code may or may not be predictably fast, unlike in the compiled languages, and that makes Lua sometimes infuriating. Alas *"engineering"* in the software engineering is about understanding "what's going on", and the good news is that the LuaJIT has excellent facilities to assist you with this quest. Usually, there is something preventing trace compilation or excessive garbage collection.
 
 First thing you can do is to disable JIT and observe.
 
@@ -252,13 +267,18 @@ $ time ./luatest test.lua
 real	0m0.603s
 ```
 
-Wow, that's roughly half the time it took with JIT enabled. There are two diagnostic tools available - `jit.v` and `jit.dump`.
-I'm going to start with the first one, as the latter one falls into *"profiling"* in my mind. Notice that despite the absence of
-trace compiler, it's already churning close to 1.5M calls per second.
+Wow, that's roughly half the time it took with JIT enabled. There are two diagnostic tools available - `jit.v` and `jit.dump`. I'm going to start with the first one, as the latter one falls into *"profiling"* in my mind. Notice that it's already churning close to 1.5M calls per second in the interpreted mode.
 
-### Tracing the tracer
+## Tracing the tracer
 
-Module `jit.v` is able to print events happening in the JIT to either a file or stdout. It reports trace aborts, transitions or any other obstructions to that toasty compiled traces. You can enable it with a simple `require('jit.v').start()`.
+Gists for this section:
+
+* [ldhcp-ex2.c][ldhcp-ex2-c]
+* [dhcp.lua][ldhcp-ex2-ffi]
+* [test.lua][ldhcp-ex2-lua]
+
+Module `jit.v` is able to print events happening in the JIT to either a file or stdout. It reports trace aborts, transitions or any other roadblocks to that toasty compiled traces. You can enable it with a simple `require('jit.v').start()`.
+
 First re-enable the JIT that we turned off, and restart in verbose mode.
 
 ```bash
@@ -272,18 +292,23 @@ $ time ./luatest test.lua
 ... bazillion times ...
 ```
 
-That's a lot of trace flushes and hence reason why it's so slow. It also happens somewhere out of Lua scope, so it must be in our C code. The problem here is that we push metatables to userdata objects, forcing the JIT to flush the code cache. Another common problem is doing [NYI operations][luajit-nyi] which cause trace aborts. This is especially costly, as the tracer does a lot of work in background which never comes to fruition.
+That's a lot of trace cache flushes, and hence reason why it's so slow. It also happens somewhere out of Lua scope, so it must be in our C code. The problem here is that we set metatables to userdata objects in C, thus forcing the JIT to flush the code cache. Another common problem is doing [NYI operations][luajit-nyi] which cause trace aborts. This is especially costly, as the tracer does a lot of work in background which never comes to fruition.
 
-Now we're left with two choices, rewrite our C API without metatables - e.g. `buf:op()` would become `dhcp.op(buf)`, or rewrite it using LuaJIT FFI. First choice is portable between different Lua flavours, but Lua/C calls would still abort traces (as [they're NYI][luajit-nyi]). The second choice locks us to LuaJIT unfortunately. Since this is a tutorial, I'm going to show you how to rewrite the current bindings using FFI.
+Now we're left with two choices, either rewrite our C API without metatables - e.g. `buf:op()` would become `dhcp.op(buf)`, or rewrite it using LuaJIT FFI. First choice is portable between different Lua flavours, but Lua/C calls would still abort traces (as [they're NYI][luajit-nyi]). The second choice locks us to LuaJIT unfortunately. Since this is a tutorial, I'm going to show you how to rewrite the current bindings using FFI.
 
-A short note on portability - Lua usually isn't backwards-compatible between minor versions. If you need to target multiple versions, you usually end up with an `#ifdef` boilerplate. LuaJIT targets 5.1 ABI with [several extensions][luajit-extensions].
-For example, 5.2 introduced proper scoping, that changes a way of [doing sandboxing][knot-sandbox1].
+A short note on portability - Lua usually isn't backwards-compatible between minor versions. If you need to target multiple versions, you usually end up with an `#ifdef` boilerplate. LuaJIT targets 5.1 ABI with [several extensions][luajit-extensions]. For example, 5.2 introduced proper scoping, that changes a way of [doing sandboxing][knot-sandbox1].
 
-### FFI bindings to your C code
+## FFI bindings to your C code
+
+Gists for this section:
+
+* [ldhcp-ex2.c][ldhcp-ex2-c]
+* [dhcp.lua][ldhcp-ex2-ffi]
+* [test.lua][ldhcp-ex2-lua]
 
 The idea behind FFI is to get rid of the Lua/C boilerplate code and [describe your datastructures][luajit-ffi] and function signatures in a mix of C definitions and Lua. The C part could look like this.
 
-```lua
+```c
 local ffi = require('ffi')
 ffi.cdef[[
 /* DHCP header format */
@@ -308,19 +333,18 @@ void yiaddr_set(char *msg, const char *yiaddr);
 ]]
 ```
 
-This describes the structure of the packet, constants and a C function signature. Notice how
-FFI describes [constants/enums using a structure][luajit-const] with static const integers, compared to idiomatic C `enum { ... }`.
+This describes the structure of the packet, constants and a C function signature. Notice how FFI describes [constants/enums using a structure][luajit-const] with static const integers, compared to idiomatic C `enum { ... }`.
+
 Now we can cast the C string buffer (in form of Lua light userdata) to the structure type.
 
-```lua
+```javascript
 local msg = ffi.cast('struct dhcp_msg *', buf)
 print(msg.htype)
 ```
 
-LuaJIT can also assign metatables to C types, we can use this to give the message nicely wrapped operations.
-They're also compiled, so it's very very cheap.
+LuaJIT can also assign metatables to C types, we can use this to give the messages nicely wrapped operations. They're also compiled, so it's very very cheap.
 
-```lua
+```javascript
 local dhcp_msg_t = ffi.typeof('struct dhcp_msg')
 ffi.metatype( dhcp_msg_t, {
 	__index = {
@@ -333,12 +357,11 @@ local msg = ffi.cast('struct dhcp_msg *', buf)
 print(msg:chaddr('192.168.1.1'))
 ```
 
-The `ffi.C` points to global C namespace, kind of like `dlsym(RTLD_DEFAULT)`. You can however call to other libraries
-using `ffi.open()`, see the [FFI Tutorial][luajit-ffitut], section "Accessing the zlib Compression Library".
+The `ffi.C` points to global C namespace, kind of like `dlsym(RTLD_DEFAULT)`. You can however call to other libraries using `ffi.open()`, see the [FFI Tutorial][luajit-ffitut], section "Accessing the zlib Compression Library".
 
-We have created [three files][ldhcp-ex2], one is [our C application][ldhcp-ex2-c], the second is a [Lua module with FFI bindings][ldhcp-ex2-ffi], and finally [our userscript][ldhcp-ex2-lua]. I have created gists for all three, so you can have a look at them and get it ready for the starting blocks.
+We have created three files, one is [our C application][ldhcp-ex2-c], the second is a [Lua module with FFI bindings][ldhcp-ex2-ffi], and finally [our userscript][ldhcp-ex2-lua]. I have created snippets for all three, so you can have a look at them and get it ready for the test.
 
-### Inspecting traces for profit
+## Inspecting traces for profit
 
 ```bash
 $ time ./luatest test.lua
@@ -352,11 +375,11 @@ That looks faster than the previous run with the JIT on, but it's still slow. Le
     for i,v in ipairs(allowed_prefix) do
 ```
 
-Oh. It looks like that in Lua 2.1 `ipairs()` is [already compiled][luajit-nyi], but the short loop is causing aborts.
-To investigate closer, we can require the `jit.dump` module to show us traces, IR and compiled code events. [Here's][luajit-dump] a comment
-on all available options. Since the log can be rather large, we can choose to print it to a separate file instead of `stdout`.
+Oh. It looks like that in Lua 2.1 `ipairs()` is [already compiled][luajit-nyi], but the short loop is causing aborts. To investigate closer, we can load the `jit.dump` module to show us traces, IR and compiler events. [Here's][luajit-dump] a comment on all available options.
 
-```lua
+Since the log can be rather large, we can choose to print it to a separate file instead of `stdout`. Generally, this is what you're going to do to inspect traces.
+
+```bash
 $ echo "require('jit.dump').start('bsx', 'jit.log')" >> test.lua
 $ time ./luatest test.lua
 real	0m1.064s
@@ -374,12 +397,9 @@ $ less jit.log
 ---- TRACE 4 abort test.lua:9 -- inner loop in root trace
 ```
 
-I'm not entirely sure why this aborts here. I suspect it's because of the `ipairs()` iteration with [`ITERC`][luajit-iterc]
-over a very short loop (2 items). Let's see if we can help it by rewriting it to for loop *(1)*.
-Another thing we can do is to get rid of the `return` in the loop body using `break` *(2)*, so that the trace never ends
-inside the loop.
+I'm not entirely sure why this aborts here. I suspect it's because of the `ipairs()` iteration with [`ITERC`][luajit-iterc] over a very short loop (2 items). Let's see if we can help it by rewriting it to simple `for` loop *(1)*. Another thing we can do, is to get rid of the `return` in the loop body using `break` *(2)*, so that the function never ends inside the loop.
 
-```lua
+```javascript
 local function acl(hwaddr)
     local ret = false
     for i = 1, #allowed_prefix do -- (1)
@@ -400,18 +420,15 @@ $ time ./luatest test.lua
 real	0m0.135s
 ```
 
-Whoa, this is an order of magnitude faster and `jit.dump` shows that it succeeded to find a trace for the whole callback.
-Usually there are a few aborted traces before it finds it, it's nothing to worry about.
+This is an order of magnitude faster, and `jit.dump` shows that it succeeded to find a trace for the whole callback. Usually there are a few aborted traces before it finds it, it's nothing to worry about.
 
-*Note* - Branches are not allowed in traces, so the compiler deals with it by spawning side traces. The [LuaJIT performance guide][luajit-perfguide] states that highly biased are *okay*, as the most likely branch is going to get compiled in the root trace.
-However here we can't presume anything about the branching. Have a look at the ["Tracing JITs and modern CPUs part 3"][luajit-badcase] for more information.
+*Note* - Branches are not allowed in traces, so the compiler deals with it by spawning side traces. The [LuaJIT performance guide][luajit-perfguide] states, that highly biased branches are *okay*, as the most likely branch is going to get compiled in the root trace. However here we can't presume anything about the branching. Have a look at the ["Tracing JITs and modern CPUs part 3"][luajit-badcase] for more information.
 
 Since we're close to the **8M** callbacks/s figure, we can have a look at the profile to fine tune the remaining slowdowns.
 
-### Finding hotspots with LuaJIT profiler
+## Finding hotspots with LuaJIT profiler
 
-Mike Pall [introduced][luajit-p] the sampling profiler for the 2.1, which I highly recommend for the performance improvements only.
-The sampling rate is configurable and it's really quick. Let's have a look at it first.
+Mike Pall [introduced][luajit-p] the sampling profiler for the 2.1, which I highly recommend for the performance improvements only. The sampling rate is configurable and it's really quick. Let's have a look at it first.
 
 ```bash
 $ echo "require('jit.p').start('vl')" >> test.lua
@@ -424,9 +441,7 @@ $ ./luatest test.lua
   -- 100%  test.lua:21
 ```
 
-The [option `v`][luajit-popts] stands for *"show VM states"*, in this case *"Compiled"* or *"C code"*, and `l` for per-line dumps.
-Now we know that approximately 80% of the time is spent in the toasty compiled traces and 20% in C callbacks.
-Since it's sampling our already short callbacks, it may not be accurate. We can improve the resolution of the sampling with `i` option.
+The [option `v`][luajit-popts] stands for *"show VM states"*, in this case *"Compiled"* or *"C code"*, and `l` for per-line dumps. Now we know that approximately 80% of the time is spent in compiled traces and 20% in C callbacks. Since it's sampling our already short callbacks, it may not be accurate. We can improve the resolution of the sampling with an `i` option.
 
 ```bash
 $ echo "require('jit.p').start('vli1')" >> test.lua
@@ -443,26 +458,17 @@ $ ./luatest test.lua
   -- 100%  test.lua:21
 ```
 
-It looks that the message type conversion (`test.lua:21`) took some time to compile, the other is looping.
-Nothing that stands out. We could probably unroll the loop since it's short or rewrite the `yiaddr_set` in Lua, so it
-could be inlined. But that wouldn't help it dramatically.
-We're almost at the limit of [`pcall() / sec`][luajit-pcall-overhead].
+It looks that the message type conversion (`test.lua:21`) took some time to compile, the other is looping. Nothing stands out. We could probably unroll the loop since it's short, or rewrite the `yiaddr_set` in Lua, so it could be inlined. But that wouldn't help it dramatically. We're closing to the limit of [`pcall() / sec`][luajit-pcall-overhead].
 
-### Breaking the ceiling
+## Breaking the ceiling
 
-The `pcall() / sec` overhead is going to be the limit if you use C to Lua callbacks. On my computer it's about 50ns,
-that's a budget for 20 million calls per second. To give it some sense of scale, framing rate of 10GbE is 14.88M pps.
-Multithreaded web servers clock up to several millions of requests per second with pipelining. Typical single-threaded UDP
-daemons [do less][cf-1mpps] than that.
+The `pcall() / sec` overhead is going to be the limit if you use C to Lua callbacks. On my computer it's about 50ns, that's a budget for 20 million empty calls per second. To give it some sense of scale, framing rate of 10GbE is 14.88M pps. Multithreaded web servers clock up to several millions of requests per second with pipelining. Typical single-threaded UDP daemons [do less][cf-1mpps] than that.
 
-While that is not C call speed, it's competitive. After all, performance is about squeezing in a time budget required for the job.
-That time budget is different for numerical simulations, where the cost of C/Lua call would dominate. More so, the JIT can't cross
-a `pcall()` boundary so the trace can be only as long as one single callback.
+While that is not a C call speed, it's competitive. After all, performance is about squeezing in a time budget required for the job. That time budget is different for numerical simulations, where the cost of C/Lua call would dominate. More so, the JIT can't cross the `pcall()` boundary, so the trace can be only as long as one single callback.
 
-The only way to break this limit is moving the event loop to Lua, and call back to helper functions in C. Sort of the other way round.
-This is how the C event loop could be rewritten in Lua:
+The only way to break this limit is moving the event loop to Lua, and call back to helper functions in C. Sort of the other way round. This is how the C event loop could be rewritten in Lua:
 
-```lua
+```javascript
 local len = 512
 local buf = ffi.new('char[?]', len)
 local dhcp_req = dhcp.msg_t(buf)
@@ -472,39 +478,34 @@ for i = 1, 1000000 do
 end
 ```
 
-Running it is indeed twice as fast, the JIT was able to compile the whole loop without any resumes, in or out.
-The downside is that it's not always possible to rewrite the C event loop due to an already existing code base,
-specific networking or custom memory allocators. Speaking of which.
+Running it is indeed twice as fast, the JIT was able to compile the whole loop without any resumes, in or out. The downside is that it's not always possible to rewrite the C event loop due to an already existing code base, specific networking, or custom memory management.
 
-#### On garbage collection
+## On garbage collection
 
-Lua is a garbage collected language. I realize that's a blow for a diehard C programmer whose manual memory management is infallible.
-I'm not going to argue pros and cons here, but the truth is that I make mistakes. Moreover, a lot of people take `malloc / free` for an efficient memory management. In real world, the GC hasn't been an issue for me (performance-wise).
-In addition, it offers [some tweaks][luatut-gc] for time-constrained applications. Up to a point though,
-as it describes the constraints [very vaguely][lua-gc]:
+Lua is a garbage collected language. I realize that's a blow for a diehard C programmer whose manual memory management is infallible. I'm not going to argue pros and cons here, but the thing is that a lot of people take the tedious `malloc / free` for an efficient memory management for some reason. In real world, the GC hasn't been an issue, at least for me (performance-wise). In addition, it offers [some tweaks][luatut-gc] for time-constrained applications, even though the documentation describes the options [somewhat vaguely][lua-gc]:
 
-> "The step multiplier controls the relative speed of the collector relative to memory allocation."
+*"The step multiplier controls the relative speed of the collector relative to memory allocation."*
 
-The only time I increased the step size was when the default GC speed couldn't keep up with the high packet rate,
-but it can also be that the code generated too much [unnecessary garbage][lua-gctips].
+The only time I increased the step size was, when the default GC speed couldn't keep up with the high packet rate, but it can also be that the code generated too much [unnecessary garbage][lua-gctips].
 
-### Further tips
+## Further tips
 
-This about covers the process of embedding LuaJIT in your C application. We went from zero to stub server doing 8 million callbacks per second, and peeked at the additional performance improvements. I sure hope it dispelled the worries about embedding a scripting language in your application. A general tip is to watch the [LuaJIT mailing list][luajit-mlist] for hidden gems and solutions. I tried to reference several of those in this article, but I'm sure something has eluded me.
+This about covers the process of embedding LuaJIT in your C application. We went from zero to stub server doing 8 million callbacks per second, and peeked at the additional performance improvements. I sure hope it dispelled the worries about embedding a scripting language. A general tip is to watch the [LuaJIT mailing list][luajit-mlist] for hidden gems and solutions. I tried to reference several of those in this article, but I'm sure something has eluded me.
 
-I also hope that this might help to attract more people to LuaJIT. Mike Pall, the author, has announced plans to reduce his engagement in the project. While it is healthy and in [good hands][luajit-cf], it would be awesome if it kept the momentum. The Gotham still needs its true hero.
+I also hope that this might help to attract more people to LuaJIT. Mike Pall, the author, has announced plans to reduce his engagement in the project. While it is healthy and in [good hands][luajit-cf], it would be awesome if it kept the momentum. The Gotham still needs its hero.
 
-Further tips (subject to change):
+Further tips and follow-ups:
 
 * [Numerical Computing Performance Guide][luajit-perfguide]
 * [Tracing JITs and modern CPUs part 3: A bad case][luajit-badcase]
 * [high-performance packet filtering with pflua](https://wingolog.org/archives/2014/09/02/high-performance-packet-filtering-with-pflua)
+* [JIT and multiple return values](http://brat-lang.org/2014/01/19/simple-jit-improvement.html)
 
-[kresd]: https://github.com/CZ-NIC/knot-resolver
+[kresd]: https://gitlab.labs.nic.cz/knot/resolver
 [lua-infuriating]: http://www.slideshare.net/jgrahamc/lua-the-worlds-most-infuriating-language
 [lua-15min]: http://tylerneylon.com/a/learn-lua/
 [luajit]: http://luajit.org/download.html
-[lua]: http://www.lua.org/download.html
+[luapg]: http://www.lua.org/download.html
 [elua]: http://www.eluaproject.net/get-started/downloads
 [luajit-install]: http://luajit.org/install.html
 [lua-upval]: http://www.lua.org/pil/27.3.3.html
@@ -527,11 +528,11 @@ Further tips (subject to change):
 [luajit-ffi]: http://luajit.org/ext_ffi_api.html
 [luajit-ffitut]: http://luajit.org/ext_ffi_tutorial.html
 [luajit-const]: http://wiki.luajit.org/ffi-knowledge#Constants
-[knot-sandbox1]: https://github.com/CZ-NIC/knot-resolver/blob/0f7567d2dc1e94360d9473d03591858909a792c6/daemon/lua/sandbox.lua#L103
-[ldhcp-ex2]: https://gist.github.com/vavrusa/926ced5fb2944da4fa66
-[ldhcp-ex2-c]: https://gist.github.com/vavrusa/926ced5fb2944da4fa66#file-ldhcp-ex2-c
-[ldhcp-ex2-ffi]: https://gist.github.com/vavrusa/926ced5fb2944da4fa66#file-dhcp-lua
-[ldhcp-ex2-lua]: https://gist.github.com/vavrusa/926ced5fb2944da4fa66#file-test-lua
+[knot-sandbox1]: https://gitlab.labs.nic.cz/knot/resolver/blob/0f7567d2dc1e94360d9473d03591858909a792c6/daemon/lua/sandbox.lua#L103
+[ldhcp-ex1-c]: https://gitlab.labs.nic.cz/labs/snippets/snippets/33
+[ldhcp-ex2-c]: https://gitlab.labs.nic.cz/labs/snippets/snippets/31
+[ldhcp-ex2-ffi]: https://gitlab.labs.nic.cz/labs/snippets/snippets/30
+[ldhcp-ex2-lua]: https://gitlab.labs.nic.cz/labs/snippets/snippets/32
 [luajit-dump]: https://github.com/luvit/luajit-2.0/blob/master/src/jit/dump.lua#L29
 [luajit-abort]: https://www.freelists.org/post/luajit/simple-change-causes-trace-aborts,1
 [luajit-iterc]: http://wiki.luajit.org/Bytecode-2.0#Loops-and-branches
@@ -544,3 +545,4 @@ Further tips (subject to change):
 [luajit-mlist]: http://luajit.org/list.html
 [luajit-cf]: http://www.freelists.org/post/luajit/Looking-for-new-LuaJIT-maintainers
 [luajit-badcase]: https://github.com/lukego/blog/issues/8
+[luafun]: https://github.com/rtsisyk/luafun
