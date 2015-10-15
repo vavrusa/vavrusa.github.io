@@ -82,13 +82,13 @@ The `YIELD` pauses current layer, starts solving whatever queries you pushed, an
 if state == kres.YIELD then
 	local last = req:resolved()
 	if bit.and(last.flags, kres.query.RESOLVED) then
-		return kres.DONE -- Fetched SOA
+		return kres.DONE -- Fetched NS
     else
-    	return kres.FAIL -- Failed to fetch SOA
+    	return kres.FAIL -- Failed to fetch NS
     end
 else
-    if pkt:qtype() == kres.type.NS then
-        local next = req:push(pkt:qname(), kres.type.SOA, kres.class.IN)
+    if pkt:qtype() == kres.type.SOA then
+        local next = req:push(pkt:qname(), kres.type.NS, kres.class.IN)
         next.flags = kres.query.AWAIT_CUT + kres.query.DNSSEC_WANT
         next.parent = qry
         return kres.YIELD -- Resolve SOA and resume
