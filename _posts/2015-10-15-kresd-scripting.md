@@ -17,7 +17,8 @@ mod.count = 0
 mod.layer = {
 	consume = function (state, req, pkt)
         pkt = kres.pkt_t(pkt)
-        if pkt:qtype() == kres.type.AAAA and pkt:qname():find('\4kiwi') then
+        if pkt:qtype() == kres.type.AAAA and
+           pkt:qname():find('\4kiwi') then
             mod.count = mod.count + 1
         end
         return state
@@ -92,7 +93,8 @@ if state == kres.YIELD then
     end
 else
     if pkt:qtype() == kres.type.SOA then
-        local next = req:push(pkt:qname(), kres.type.NS, kres.class.IN)
+        local next = req:push(pkt:qname(), kres.type.NS,
+                              kres.class.IN)
         next.flags = kres.query.AWAIT_CUT + kres.query.DNSSEC_WANT
         next.parent = qry
         return kres.YIELD -- Resolve NS and resume
@@ -113,7 +115,8 @@ begin = function(state, req)
     local query = req:current()
     if query:name():find('\4kiwi') then
     	req:pop(query) -- Pop old query, and replace with new one
-        req:push('\7blocked', query.type, query.class, query.flags, 0)
+        req:push('\7blocked', query.type, query.class,
+                 query.flags, 0)
     end
     return state
 end
