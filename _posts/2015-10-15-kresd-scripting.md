@@ -5,7 +5,7 @@ title: Scripting in Knot DNS Resolver
 summary: "How to make sense of the modules, layers and FFI in Knot DNS Resolver."
 ---
 
-This week I was approached by a man dressed in a platypus costume, he asked me: *"These layers and modules you talk about, they're cool. But can it be even better?"*. After the initial costume distraction wore off, I pondered a bit and said: *"Sure, let me just grab a cup of coffee"*. The real story is that the layers are now much more interactive, and the documentation is improved.
+This week I was approached by a man dressed in platypus pyjamas, he asked me: *"These layers and modules you talk about, they're cool. But can it be even better?"*. After the initial costume distraction wore off, I pondered a bit and said: *"Sure, let me just grab a cup of coffee"*. The real story is that the layers are now much more interactive, and the documentation is improved.
 
 ## What are layers
 
