@@ -1,7 +1,7 @@
 ---
 published: true
 layout: post
-summary: "Why and how you can embed LuaJIT in your C application explained in layman's terms. The article covers all steps from building a small C application, extending it with Lua, to using FFI bindings. I wrote this originally for the CZ.NIC blog, and have been kindly allowed to keep it on my personal site."
+summary: "How to make sense of the modules, layers and FFI in Knot DNS Resolver."
 ---
 
 
