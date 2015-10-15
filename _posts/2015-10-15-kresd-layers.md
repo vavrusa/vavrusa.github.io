@@ -91,7 +91,7 @@ else
         local next = req:push(pkt:qname(), kres.type.NS, kres.class.IN)
         next.flags = kres.query.AWAIT_CUT + kres.query.DNSSEC_WANT
         next.parent = qry
-        return kres.YIELD -- Resolve SOA and resume
+        return kres.YIELD -- Resolve NS and resume
     end
     return state
 end
