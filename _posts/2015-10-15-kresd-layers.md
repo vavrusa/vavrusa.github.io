@@ -4,7 +4,7 @@ published: false
 
 # Scripting in Knot DNS Recursive
 
-This week I was approached by a man dressed in a duck costume, he asked me: *"These layers and modules you talk about, they're okay. But can you make it even better?"*. After the initial costume distraction wore off, I pondered a bit and said: *"Sure, let me just grab a cup of coffee"*.
+This week I was approached by a man dressed in a duck costume, he asked me: *"These layers and modules you talk about, they're cool. But can it be even better?"*. After the initial costume distraction wore off, I pondered a bit and said: *"Sure, let me just grab a cup of coffee"*. The real story is that layers are now much more interactive, and the documentation is improved.
 
 ## What are layers
 
@@ -55,10 +55,12 @@ The previous example has shown how to observe the resolution chain. Let's see ho
 Short version is that there is a *driver* behind resolution which does I/O, figures out when to ask what, sets correct flags and so on. The plus is that layers don't have to know about DNSSEC, caching layers, correct ordering etc. 
 
 ```lua
-pkt = kres.pkt_t(pkt)
 if pkt:qtype() == kres.type.SOA then
     local next = req:push(pkt:qname(), kres.type.NS, kres.class.IN)
     next.flags = kres.query.AWAIT_CUT + kres.query.DNSSEC_WANT
+    return kres.DONE
+else
+	return state
 end
 ```
 
@@ -73,6 +75,7 @@ consume = function (state, req, pkt)
     if state == kres.FAIL then
         return state
     end
+    return kres.DONE
 end
 ```
 
@@ -81,7 +84,7 @@ The `YIELD` pauses current layer, starts solving whatever queries you pushed, an
 ```lua
 if state == kres.YIELD then
 	local last = req:resolved()
-	if bit.and(last.flags, kres.query.RESOLVED) then
+	if bit.band(last.flags, kres.query.RESOLVED) then
 		return kres.DONE -- Fetched NS
     else
     	return kres.FAIL -- Failed to fetch NS
@@ -97,7 +100,7 @@ else
 end
 ```
 
-The first branch is executed when the paused layer resumes, there we can check whether the SOA query finished successfuly. The second branch pushes the SOA query, and then pauses.
+The first branch is executed when the paused layer resumes, there we can check whether the `NS` query finished successfuly. The second branch pushes the `NS` query, and then pauses.
 
 ## Rewriting queries
 
