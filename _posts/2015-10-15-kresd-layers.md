@@ -1,6 +1,7 @@
 ---
-published: false
+published: true
 ---
+
 
 # Scripting in Knot DNS Recursive
 
@@ -121,12 +122,3 @@ end
 ## Wrap up
 
 That's it. Here we are with the examples for three different layer usage patterns in a few lines of Lua code. The advantage here is that you can drop custom modules in the configuration directory, no need to patch or recompile the software. If you don't mess up the Lua code, it's going to run close to C code speed. When in trouble achieving that, check the [Embedding LuaJIT in 30 minutes](http://en.blog.nic.cz/2015/08/12/embedding-luajit-in-30-minutes-or-so/) I wrote before.
-
-
-
-
-
-
-
-
-
