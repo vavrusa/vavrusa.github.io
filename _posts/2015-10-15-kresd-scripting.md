@@ -9,7 +9,7 @@ This week I was approached by a man dressed in a platypus costume, he asked me: 
 
 ## What are layers
 
-Callbacks you can execute on each new/completed query, and resolver sub-requests. For example - log all `AAAA` answers from `*.kiwi`, or refuse all queries matching a blocklist. Here's an example similar to [the documentation](http://knot-resolver.readthedocs.org/en/latest/modules_api.html#writing-a-module-in-lua).
+Callbacks you can execute on each new/completed query, and resolver sub-requests. For example - to log all `AAAA` answers from `*.kiwi`, or refuse all queries matching a blocklist. Here's an example similar to [the documentation](http://knot-resolver.readthedocs.org/en/latest/modules_api.html#writing-a-module-in-lua).
 
 ```lua
 local mod = {}
@@ -38,7 +38,7 @@ $ kresd -v
 1
 ```
 
-This is only *passive* observation of the resolver I/O. You can also introspect status of the queries. For example - *"which are answered from cache?"* We can write something along the lines of:
+This is only *passive* observation of the resolver I/O. You can also inspect state of the queries. For example to answer question *"which queries in this zone are answered from cache?"* We can write something along the lines of:
 
 ```lua
 req = kres.request_t(req)
@@ -52,9 +52,9 @@ At this point, you should skim through the [Lua API reference](http://knot-resol
 
 ## Chaining queries
 
-The previous example has shown how to observe the resolution chain. Let's see how we can change it. For example - for every NS record, I want its SOA as well. One way how to do that is to simply chain another query. Here's a [documentation reference](http://knot-resolver.readthedocs.org/en/latest/lib.html#for-developers).
+The previous example has shown how to observe the resolution chain. Let's see how we can change it. For example - for every NS record, I want its SOA as well. One way how to do that, is to simply push another query. Here's a [documentation reference](http://knot-resolver.readthedocs.org/en/latest/lib.html#for-developers).
 
-Short version is that there is a *driver* behind resolution which does I/O, figures out when to ask what, sets correct flags and so on. The plus is that layers don't have to know about DNSSEC, caching layers, correct ordering etc. 
+Short version is that there is a *driver* behind resolution which does I/O, figures out when to ask what, sets correct flags, and so on. The added value is that layers don't have to know about DNSSEC, caching, correct ordering etc.
 
 ```lua
 if pkt:qtype() == kres.type.SOA then
@@ -81,7 +81,7 @@ consume = function (state, req, pkt)
 end
 ```
 
-The `YIELD` pauses current layer, starts solving whatever queries you pushed, and then resumes the paused layer. One example is DNSSEC, where you need a DNSKEY to verify signatures. Or use only `NS` records that have a `SOA`.
+The `YIELD` pauses current layer, starts solving whatever queries you pushed, and then resumes the paused layer. One example is DNSSEC, where you need a DNSKEY to verify signatures. Or to answer only `NS` records, for which a `SOA` exists.
 
 ```lua
 if state == kres.YIELD then
@@ -107,7 +107,7 @@ The first branch is executed when the paused layer resumes, there we can check w
 
 ## Rewriting queries
 
-I'm a bit reluctant to write this, as there is not any *good* use case that comes to my mind. But let's say you want to sinkhole several queries, e.g. if the `QNAME` matches a pattern, we rewrite it to something else. This can be done before *driver* starts issuing queries, in the *begin* layer.
+I'm a bit reluctant to write this, as there is not any *good* use case that comes to my mind. But let's say you want to sinkhole several domain names, e.g. if the `QNAME` matches a pattern, we rewrite it to something else. This can be done before *driver* starts issuing queries, in the *begin* layer.
 
 ```lua
 begin = function(state, req)
