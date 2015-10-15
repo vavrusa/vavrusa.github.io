@@ -1,6 +1,9 @@
 ---
 published: true
+layout: post
+summary: "Why and how you can embed LuaJIT in your C application explained in layman's terms. The article covers all steps from building a small C application, extending it with Lua, to using FFI bindings. I wrote this originally for the CZ.NIC blog, and have been kindly allowed to keep it on my personal site."
 ---
+
 
 
 This week I was approached by a man dressed in a duck costume, he asked me: *"These layers and modules you talk about, they're cool. But can it be even better?"*. After the initial costume distraction wore off, I pondered a bit and said: *"Sure, let me just grab a cup of coffee"*. The real story is that layers are now much more interactive, and the documentation is improved.
