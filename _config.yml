@@ -5,7 +5,7 @@ email:       marek@vavrusa.com
 author:      "Marek Vavrusa"
 description: "I'm a traveler in time and space."
 baseurl:     ""
-url:         "http://marek.vavrusa.com"
+url:         "https://vavrusa.github.io"
 
 # Google analytics
 google_analytics:
